@@ -13,6 +13,23 @@ long long_at_index(const char *hex_string, size_t index)
 	return strtol(hex_octet, NULL, 16);
 }
 
+char *hex_to_raw(const char *hex, size_t length, size_t *out_raw_len)
+{
+	if (length % 2 != 0) {
+		return NULL;
+	}
+	char *raw = calloc(1, length / 2);
+	for (size_t i = 0; i < length; i += 2) {
+		//printf("drop byte %lx\n", long_at_index(hex, i));
+		raw[i / 2] = long_at_index(hex, i);
+	}
+
+	if (out_raw_len) {
+		*out_raw_len = length / 2;
+	}
+
+	return raw;
+}
 
 bool is_base64_encoded(const char *candidate, size_t len)
 {

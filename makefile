@@ -8,7 +8,7 @@ output_dirs:
 all: tests
 
 tests: base64_test repeating_key_xor_test decrypt_single_char_xor_test xor_buffers_test aes_128_ecb_test
-	$(BIN)/hex_to_base64 && $(BIN)/xor_buffers && $(BIN)/decrypt_single_char_xor && $(BIN)/decrypt_single_char_xor input/input_4.txt && $(BIN)/repeating_key_xor input/input_6.txt input/decrypted_6.txt && $(BIN)/aes_128_ecb input/input_7.txt "YELLOW SUBMARINE"
+	$(BIN)/hex_to_base64 && $(BIN)/xor_buffers && $(BIN)/decrypt_single_char_xor && $(BIN)/decrypt_single_char_xor input/input_4.txt && $(BIN)/repeating_key_xor input/input_6.txt input/decrypted_6.txt && $(BIN)/aes_128_ecb input/input_7.txt "YELLOW SUBMARINE" input/input_8.txt
 
 base64_test: output_dirs hex_to_base64.c
 	$(CC) -DBASE64_TEST -o $(BIN)/hex_to_base64 hex_to_base64.c

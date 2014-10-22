@@ -1,5 +1,6 @@
 #include <CommonCrypto/CommonCrypto.h>
 #include <stdio.h>
+#include <stdbool.h>
 
 #include "aes_128_ecb.h"
 #include "utility.h"
@@ -13,7 +14,7 @@ int aes_128_ecb_encrypt(const char *plaintext, size_t plaintext_len, const char 
 	CCCryptorStatus status = CCCrypt(kCCEncrypt, kCCAlgorithmAES, kCCOptionPKCS7Padding | kCCOptionECBMode, key, key_len, NULL, plaintext, plaintext_len, ciphertext, plaintext_len + 16, &ciphertext_len);
 	if (status != kCCSuccess) {
 		free(ciphertext);
-		fprintf(stderr, "failed to decrypt: %d\n", status);
+		fprintf(stderr, "failed to encrypt: %d\n", status);
 		return -1;
 	}
 
@@ -55,11 +56,25 @@ int aes_128_ecb_decrypt(const char *ciphertext, size_t ciphertext_len, const cha
 	return 0;
 }
 
+bool is_aes_128_ecb(const char *ciphertext, size_t ciphertext_len)
+{
+	size_t block_count = ciphertext_len / 16;
+	for (size_t i = 0; i < block_count; i++) {
+		for (size_t j = i + 1; j < block_count; j++) {
+			if (memcmp(ciphertext + (i * 16), ciphertext + (j * 16), 16) == 0) {
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
 #if AES_128_ECB_TEST
 
 int main(int argc, char **argv)
 {
-	if (argc < 3) {
+	if (argc < 4) {
 		fprintf(stderr, "no input file for AES decrypt\n");
 		exit(-1);
 	}
@@ -96,6 +111,23 @@ int main(int argc, char **argv)
 		fprintf(stderr, "AES 128 ECB: input and reencrypted don't match\n");
 		exit(-1);
 	}
+
+	foreach_line_in_file(argv[3], ^(const char *line, size_t line_len, int index) {
+		if (line[line_len - 1] == '\n') {
+			line_len--;
+		}
+		size_t raw_len;
+		char *raw = hex_to_raw(line, line_len, &raw_len);
+		if (raw == NULL) {
+			fprintf(stderr, "failed to convert hex to raw\n");
+			exit(-1);
+		}
+
+		if (is_aes_128_ecb(raw, raw_len) && index != 132) {
+			fprintf(stderr, "AES 128 ECB: detected wrong line (%d)\n", index);
+		}
+		free(raw);
+	});
 
 	printf("AES 128 CBC OK\n");
 

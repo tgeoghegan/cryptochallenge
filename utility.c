@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include <sys/uio.h>
 #include <unistd.h>
+#include <stdbool.h>
 
 #include "utility.h"
 
@@ -43,4 +44,24 @@ char *load_buffer_from_file(const char *path, size_t *out_size)
 	}
 
 	return buf;
+}
+
+void foreach_line_in_file(const char *path, void (^handler)(const char *, size_t, int))
+{
+	FILE *input = fopen(path, "r");
+	if (input == NULL) {
+		fprintf(stderr, "failed to open input '%s': %s\n", path, strerror(errno));
+		exit(-1);
+	}
+
+	char *line = NULL;
+	size_t linecap = 0;
+	ssize_t linelen = 0;
+	int index = 0;
+	while ((linelen = getline(&line, &linecap, input)) > 0) {
+		handler(line, linelen, index);
+		index++;
+	}
+	free(line);
+	fclose(input);
 }
