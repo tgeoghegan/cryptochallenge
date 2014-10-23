@@ -65,3 +65,14 @@ void foreach_line_in_file(const char *path, void (^handler)(const char *, size_t
 	free(line);
 	fclose(input);
 }
+
+size_t memcmp_where(const char *lhs, const char *rhs, size_t size)
+{
+	for (size_t i = 0; i < size; i++) {
+		if (lhs[i] != rhs[i]) {
+			return i;
+		}
+	}
+
+	return -1;
+}

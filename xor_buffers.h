@@ -1,1 +1,1 @@
-void xor_buffers(uint8_t *buffer1, uint8_t *buffer2, uint8_t *out_buffer, size_t len);
+void xor_buffers(const char *buffer1, const char *buffer2, char *out_buffer, size_t len);

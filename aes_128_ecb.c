@@ -11,7 +11,7 @@ int aes_128_ecb_encrypt(const char *plaintext, size_t plaintext_len, const char 
 	// Ciphertext will be at most one block (16 bytes) larger than the plaintext
 	char *ciphertext = calloc(1, plaintext_len + 16);
 	size_t ciphertext_len;
-	CCCryptorStatus status = CCCrypt(kCCEncrypt, kCCAlgorithmAES, kCCOptionPKCS7Padding | kCCOptionECBMode, key, key_len, NULL, plaintext, plaintext_len, ciphertext, plaintext_len + 16, &ciphertext_len);
+	CCCryptorStatus status = CCCrypt(kCCEncrypt, kCCAlgorithmAES, kCCOptionECBMode, key, key_len, NULL, plaintext, plaintext_len, ciphertext, plaintext_len + 16, &ciphertext_len);
 	if (status != kCCSuccess) {
 		free(ciphertext);
 		fprintf(stderr, "failed to encrypt: %d\n", status);
@@ -36,7 +36,7 @@ int aes_128_ecb_decrypt(const char *ciphertext, size_t ciphertext_len, const cha
 	// Plaintext has to fit into ciphertext since we can only remove padding
 	char *plaintext = calloc(1, ciphertext_len);
 	size_t plaintext_len;
-	CCCryptorStatus status = CCCrypt(kCCDecrypt, kCCAlgorithmAES, kCCOptionPKCS7Padding | kCCOptionECBMode, key, key_len, NULL, ciphertext, ciphertext_len, plaintext, ciphertext_len, &plaintext_len);
+	CCCryptorStatus status = CCCrypt(kCCDecrypt, kCCAlgorithmAES, kCCOptionECBMode, key, key_len, NULL, ciphertext, ciphertext_len, plaintext, ciphertext_len, &plaintext_len);
 	if (status != kCCSuccess) {
 		free(plaintext);
 		fprintf(stderr, "failed to decrypt: %d\n", status);
