@@ -1,4 +1,5 @@
 #include <CommonCrypto/CommonCrypto.h>
+#include <CommonCrypto/CommonRandom.h>
 #include <stdio.h>
 #include <stdbool.h>
 
@@ -70,6 +71,20 @@ bool is_aes_128_ecb(const char *ciphertext, size_t ciphertext_len)
 	return false;
 }
 
+char *aes_generate_key(void)
+{
+	// AES key is 16 bytes
+	void *key = calloc(1, 16);
+	CCRNGStatus status = CCRandomGenerateBytes(key, 16);
+	if (status != kCCSuccess) {
+		fprintf(stderr, "failed to generate AES key: %d\n", status);
+		free(key);
+		return NULL;
+	}
+
+	return (char *)key;
+}
+
 #if AES_128_ECB_TEST
 
 int main(int argc, char **argv)
@@ -129,8 +144,14 @@ int main(int argc, char **argv)
 		free(raw);
 	});
 
+	char *key = aes_generate_key();
+	if (key == NULL) {
+		fprintf(stderr, "AES 128: failed to generate AES key\n");
+	}
+
 	printf("AES 128 CBC OK\n");
 
+	free(key);
 	free(reencrypted);
 	free(plaintext);
 	free(encrypted);

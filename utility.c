@@ -76,3 +76,13 @@ size_t memcmp_where(const char *lhs, const char *rhs, size_t size)
 
 	return -1;
 }
+
+void dump_hex(char *string, size_t len)
+{
+	printf("0x");
+	for (size_t i = 0; i < len; i++) {
+		printf("%02x", (unsigned char)string[i]);
+	}
+
+	printf("\n");
+}

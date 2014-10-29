@@ -7,7 +7,7 @@ output_dirs:
 
 all: tests
 
-tests: base64_test repeating_key_xor_test decrypt_single_char_xor_test xor_buffers_test aes_128_ecb_test pkcs7_padding_test aes_cbc_test
+tests: base64_test repeating_key_xor_test decrypt_single_char_xor_test xor_buffers_test aes_128_ecb_test pkcs7_padding_test aes_cbc_test aes_ecb_cbc_oracle_test
 
 base64_test: output_dirs hex_to_base64.c
 	$(CC) -DBASE64_TEST -o $(BIN)/hex_to_base64 hex_to_base64.c
@@ -58,6 +58,10 @@ aes_cbc.o: output_dirs aes_cbc.c
 aes_cbc_test: output_dirs aes_cbc.c pkcs7_padding.o aes_128_ecb.o base64.o utility.o xor_buffers.o
 	$(CC) -DAES_CBC_TEST -o $(BIN)/aes_cbc $(OBJ)/pkcs7_padding.o $(OBJ)/aes_128_ecb.o $(OBJ)/hex_to_base64.o $(OBJ)/utility.o $(OBJ)/xor_buffers.o aes_cbc.c
 	$(BIN)/aes_cbc input/input_10.txt "YELLOW SUBMARINE" input/decrypted_6.txt
+
+aes_ecb_cbc_oracle_test: output_dirs aes_ecb_cbc_oracle.c aes_cbc.o aes_128_ecb.o pkcs7_padding.o xor_buffers.o utility.o
+	$(CC) -DAES_ECB_CBC_ORACLE_TEST -o $(BIN)/aes_ecb_cbc_oracle $(OBJ)/aes_cbc.o $(OBJ)/aes_128_ecb.o $(OBJ)/pkcs7_padding.o $(OBJ)/xor_buffers.o $(OBJ)/utility.o aes_ecb_cbc_oracle.c
+	$(BIN)/aes_ecb_cbc_oracle
 
 clean:
 	rm -rf $(BIN); rm -rf $(OBJ)
