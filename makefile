@@ -61,7 +61,7 @@ aes_cbc_test: output_dirs aes_cbc.c pkcs7_padding.o aes_128_ecb.o base64.o utili
 
 aes_ecb_cbc_oracle_test: output_dirs aes_ecb_cbc_oracle.c aes_cbc.o aes_128_ecb.o pkcs7_padding.o xor_buffers.o utility.o base64.o
 	$(CC) -DAES_ECB_CBC_ORACLE_TEST -o $(BIN)/aes_ecb_cbc_oracle $(OBJ)/aes_cbc.o $(OBJ)/aes_128_ecb.o $(OBJ)/pkcs7_padding.o $(OBJ)/xor_buffers.o $(OBJ)/utility.o $(OBJ)/hex_to_base64.o aes_ecb_cbc_oracle.c
-	$(BIN)/aes_ecb_cbc_oracle
+	$(BIN)/aes_ecb_cbc_oracle input/input_12.txt
 
 clean:
 	rm -rf $(BIN); rm -rf $(OBJ)

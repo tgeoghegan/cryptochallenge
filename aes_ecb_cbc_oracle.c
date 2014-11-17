@@ -11,6 +11,7 @@
 #include "aes_cbc.h"
 #include "utility.h"
 #include "pkcs7_padding.h"
+#include "hex_to_base64.h"
 
 typedef bool (*aes_encryption_oracle_t)(char *, size_t, char **, size_t *, bool *);
 
@@ -97,28 +98,19 @@ out:
 
 static char *fixed_key = NULL;
 
-bool aes_encryption_oracle_fixed_key_unknown_string(const char *unknown_string, size_t unknown_string_len, const char *plaintext, size_t plaintext_len, char **out_ciphertext, size_t *out_ciphertext_len)
+bool aes_ecb_encryption_oracle(char *plaintext, size_t plaintext_len, char **out_ciphertext, size_t *out_ciphertext_len, bool *used_cbc)
 {
-	bool success = false;
-
+	bool success;
 	char *padded_plaintext = NULL;
-	char *doctored_plaintext = NULL;
-	char *ciphertext = NULL;
-
-	doctored_plaintext = calloc(1, unknown_string_len + plaintext_len);
-	if (doctored_plaintext == NULL) {
-		goto out;
-	}
-
-	memcpy(doctored_plaintext, unknown_string, unknown_string_len);
-	memcpy(doctored_plaintext + unknown_string_len, plaintext, plaintext_len);
-
 	size_t padded_len;
-	padded_plaintext = pkcs7_pad_buffer(false, doctored_plaintext, doctored_plaintext_len, 16, &padded_len);
+	char *ciphertext = NULL;
+	size_t ciphertext_len;
+
+	padded_plaintext = pkcs7_pad_buffer(false, plaintext, plaintext_len, 16, &padded_len);
 	if (padded_plaintext == NULL) {
 		goto out;
 	}
-
+	
 	if (fixed_key == NULL) {
 		fixed_key = aes_generate_key();
 		if (fixed_key == NULL) {
@@ -126,24 +118,67 @@ bool aes_encryption_oracle_fixed_key_unknown_string(const char *unknown_string, 
 		}
 	}
 
-	size_t ciphertext_len;
-	if (aes_128_ecb_encrypt(padded_plaintext, padded_len, fixed_key, 16, &ciphertext, &ciphertext_len) != 0) {
+	if (aes_128_ecb_encrypt(padded_plaintext, padded_len, fixed_key, 16, &ciphertext, &ciphertext_len) != 0)  {
 		goto out;
+	}
+
+	if (used_cbc) {
+		*used_cbc = false;
 	}
 
 	if (out_ciphertext) {
 		*out_ciphertext = ciphertext;
-		ciphertext = NULL:
+		ciphertext = NULL;
 	}
 
 	if (out_ciphertext_len) {
 		*out_ciphertext_len = ciphertext_len;
 	}
 
+	success = true;
+
+out:
+	free(padded_plaintext);
+
+	return success;
+}
+
+bool aes_encryption_oracle_fixed_key_unknown_string(const char *unknown_string, size_t unknown_string_len, const char *plaintext, size_t plaintext_len, char **out_ciphertext, size_t *out_ciphertext_len)
+{
+	bool success = false;
+
+	char *doctored_plaintext = NULL;
+	size_t doctored_plaintext_len = plaintext_len + unknown_string_len;
+	char *ciphertext = NULL;
+
+	doctored_plaintext = calloc(1, doctored_plaintext_len);
+	if (doctored_plaintext == NULL) {
+		fprintf(stderr, "failed to allocate doctored plaintext\n");
+		goto out;
+	}
+
+	memcpy(doctored_plaintext, unknown_string, unknown_string_len);
+	memcpy(doctored_plaintext + unknown_string_len, plaintext, plaintext_len);
+
+	size_t ciphertext_len;
+	if (!aes_ecb_encryption_oracle(doctored_plaintext, doctored_plaintext_len, &ciphertext, &ciphertext_len, NULL)) {
+		fprintf(stderr, "failed to encrypt doctored plaintext\n");
+		goto out;
+	}
+
+	if (out_ciphertext) {
+		*out_ciphertext = ciphertext;
+		ciphertext = NULL;
+	}
+
+	if (out_ciphertext_len) {
+		*out_ciphertext_len = ciphertext_len;
+	}
+
+	success = true;
 
 out:
 	free(doctored_plaintext);
-	free(padded_plaintext);
 	free(ciphertext);
 
 	return success;
@@ -183,35 +218,60 @@ bool aes_encryption_oracle_is_cbc(aes_encryption_oracle_t oracle, bool *correct)
 bool aes_ecb_byte_at_a_time_decrypt(const char *unknown_string, size_t unknown_string_len)
 {
 	bool success = false;
-	size_t block_size = 16;
+	char *ciphertext = NULL;
+	size_t blocksize = 16;
+	char plaintext[blocksize];
+	memset(plaintext, 'a', blocksize);
 
-	// How long is the unknown string?
-	char *empty_plaintext_ciphertext = NULL;
-	size_t empty_plaintext_ciphertext_len;
-	if (!aes_encryption_oracle_fixed_key_unknown_string(unknown_string, unknown_string_len, NULL, 0, empty_plaintext_ciphertext, empty_plaintext_ciphertext_len)) {
-		return false;
-	}
-
-	char *unknown_string_decrypted = calloc(1, empty_plaintext_ciphertext_len);
-	if (unknown_string_decrypted == NULL) {
+	// Ensure ECB is in use
+	if (aes_encryption_oracle_is_cbc(aes_ecb_encryption_oracle, NULL)) {
+		fprintf(stderr, "AES ECB byte at a time: oracle is not ECB\n");
 		goto out;
 	}
 
-	for (size_t i = 0; i < empty_plaintext_ciphertext_len; i++) {
-		char plaintext[block_size];
-		memset(plaintext, 'a', plaintext_len);
-		memcpy((plaintext + i) % block_size, unknown_string_decrypted + i, block_size - (plaintext + i) % block_size);
+	// Figure out length of unknown string. Just encrypting it yields the padded
+	// length, so we have to encrypt a sequence of controlled plaintexts of up
+	// to blocksize bytes. The first time that the ciphertext gets bigger than
+	// the ciphertext produced by the bare unknown string, we have found the
+	// amount of padding needed for the unknown string and so we know how many
+	// bytes short of a block the unknown string is. That then allows us to
+	// compute the unknown string's length from the length of the ciphertext
+	// that the unknown string along yields.
+	// Of course this is just unknown_string_len but the exercise is worthwhile.
+	size_t bare_unknown_string_ciphertext_len;
+	size_t plaintext_len_guess;
+	for (plaintext_len_guess = 0; plaintext_len_guess < blocksize; plaintext_len_guess++) {
+		size_t ciphertext_len;
+		if (!aes_encryption_oracle_fixed_key_unknown_string(unknown_string, unknown_string_len, plaintext, plaintext_len_guess, &ciphertext, &ciphertext_len)) {
+			fprintf(stderr, "AES ECB byte at a time: failed to encrypt string\n");
+			goto out;
+		}
 
-		
+		if (plaintext_len_guess == 0) {
+			bare_unknown_string_ciphertext_len = ciphertext_len;
+		}
+
+		if (ciphertext_len > bare_unknown_string_ciphertext_len) {
+			break;
+		}
 	}
 
-	success = true;
+	size_t unknown_string_len_guess = bare_unknown_string_ciphertext_len - (plaintext_len_guess - 1);
+
+	if (unknown_string_len_guess != unknown_string_len) {
+		fprintf(stderr, "Failed to guess unknown string length (guessed %zd, actually %zd)\n", unknown_string_len_guess, unknown_string_len);
+		goto out;
+	}
+
+	free(ciphertext);
+	ciphertext = NULL;
+
 out:
-	free(empty_plaintext_ciphertext);
-	free(unknown_string_decrypted);
+	free(ciphertext);
 
 	return success;
 }
+#if 0
 
 aaaaaaaaaaaaaaaa
 bonerbonerbonerb onerboner
@@ -219,21 +279,61 @@ bonerbonerbonerb onerboner
 =>
 
 bbbbbbbbbbbbbbbb
-donerdonerdonerdonerdoner
+penispenispenisp enispenis
 
 
 aaaaaaaaaaaaaaab
-onerbonerbonerbonerboner
+onerbonerbonerbo nerboner
+
+=>
+
+bbbbbbbbbbbbbbbp
+enispenispenispe nispenis
+
+
+aaaaaaaaaaaaaabo
+nerbonerbonerbon erboner
+
+=>
+
+bbbbbbbbbbbbbbpe
+nispenispenispen ispenis
+
+aaaaaaaaaaaaabon
+erbonerbonerbone rboner
+
+=>
+
+bbbbbbbbbbbbbpen
+ispenispenispeni spenis
+
+...
+
+abonerbonerboner
+bonerboner
+
+=>
+
+bpenispenispenis
+penispenis
+
+bonerbonerbonerb
+onerboner
+
+=>
+
+penispenispenisp
+enispenis
 
 aaaaaaaaaaaaaa => aaaaaaaaaaaaaabo
 aaaaaaaaaaaaaaba .. aaaaaaaaaaaaaabz
 
 the plaintext block I send in in order to guess char i of the unknown string is made up of the 15 preceding characters from the unknown string that I have decrypted so far
 if I don't know them yet, I use 'a
-
+#endif
 #if AES_ECB_CBC_ORACLE_TEST
 
-int main(void)
+int main(int argc, char **argv)
 {
 	for (int i = 0; i < 1000; i++) {
 		bool correct;
@@ -245,12 +345,15 @@ int main(void)
 		}
 	}
 
+	printf("AES ECB CBC oracle OK\n");
+
 	if (argc < 2) {
 		fprintf(stderr, "AES ECB CBC oracle: bad arguments\n");
+		exit(-1);
 	}
 
 	size_t base64_unknown_string_len;
-	char *base64_unknown_string = load_buffer_from_file(argv[1], size_t *base64_unknown_string_len);
+	char *base64_unknown_string = load_buffer_from_file(argv[1], &base64_unknown_string_len);
 	if (base64_unknown_string == NULL) {
 		fprintf(stderr, "AES ECB CBC oracle: failed to load Base64 unknown string from path %s\n", argv[1]);
 		exit(-1);
@@ -258,13 +361,14 @@ int main(void)
 
 	size_t raw_unknown_string_len;
 	char *raw_unknown_string = base64_to_raw(base64_unknown_string, base64_unknown_string_len, &raw_unknown_string_len);
+	if (raw_unknown_string == NULL) {
+		fprintf(stderr, "AES ECB CBC oracle: failed to decode base64 input string\n");
+	}
 
 	if (!aes_ecb_byte_at_a_time_decrypt(raw_unknown_string, raw_unknown_string_len)) {
 		fprintf(stderr, "AES ECB CBC oracle: failed to byte at a time decrypt ECB\n");
 		exit(-1);
 	}
-
-	printf("AES ECB CBC oracle OK\n");
 
 	return 0;
 }
