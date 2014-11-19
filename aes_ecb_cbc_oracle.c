@@ -157,8 +157,8 @@ bool aes_encryption_oracle_fixed_key_unknown_string(const char *unknown_string, 
 		goto out;
 	}
 
-	memcpy(doctored_plaintext, unknown_string, unknown_string_len);
-	memcpy(doctored_plaintext + unknown_string_len, plaintext, plaintext_len);
+	memcpy(doctored_plaintext, plaintext, plaintext_len);
+	memcpy(doctored_plaintext + plaintext_len, unknown_string, unknown_string_len);
 
 	size_t ciphertext_len;
 	if (!aes_ecb_encryption_oracle(doctored_plaintext, doctored_plaintext_len, &ciphertext, &ciphertext_len, NULL)) {
@@ -222,6 +222,12 @@ bool aes_ecb_byte_at_a_time_decrypt(const char *unknown_string, size_t unknown_s
 	size_t blocksize = 16;
 	char plaintext[blocksize];
 	memset(plaintext, 'a', blocksize);
+	char *plaintext_doctored = NULL;
+
+	if (unknown_string == NULL || unknown_string_len == 0) {
+		fprintf(stderr, "no unknown string\n");
+		goto out;
+	}
 
 	// Ensure ECB is in use
 	if (aes_encryption_oracle_is_cbc(aes_ecb_encryption_oracle, NULL)) {
@@ -263,11 +269,76 @@ bool aes_ecb_byte_at_a_time_decrypt(const char *unknown_string, size_t unknown_s
 		goto out;
 	}
 
+	fprintf(stderr, "length of unknown string: %zd\n", unknown_string_len_guess);
+
 	free(ciphertext);
 	ciphertext = NULL;
 
+	// Guess each letter of plaintext
+	size_t plaintext_doctored_len = blocksize - 1 + unknown_string_len_guess;
+	plaintext_doctored = calloc(1, plaintext_doctored_len);
+	memset(plaintext_doctored, 'a', blocksize - 1);
+
+	for (size_t i = 0; i < unknown_string_len_guess; i++) {
+		char *curr_plaintext = plaintext_doctored + i;
+		char *curr_ciphertext = NULL;
+		size_t curr_ciphertext_len;
+		//fprintf(stderr, "curr_plaintext is %s\n", curr_plaintext);
+		if (!aes_encryption_oracle_fixed_key_unknown_string(unknown_string, unknown_string_len, curr_plaintext, blocksize - 1, &curr_ciphertext, &curr_ciphertext_len)) {
+			fprintf(stderr, "failed to encrypt ciphertext %zd\n", i);
+			goto out;
+		}
+
+		// Account for padding to figure out what last byte of ciphertext is
+		char last_ciphertext_char = curr_ciphertext[blocksize - 1];
+		fprintf(stderr, "last char of curr_ciphertext: %d\n", (int)last_ciphertext_char);
+
+		// Now we know that the character at position blocksize - 1 in
+		// curr_ciphertext is the encryption of the ith character in the unknown
+		// string. Since we control the first blocksize - 1 characters in the
+		// plaintext, we can easily brute force the remaining character to
+		// figure out the ith plaintext character.
+		char guess_plaintext[blocksize];
+		int c;
+		for (c = 0; c < 256; c++) {
+			memcpy(guess_plaintext, plaintext_doctored + i, blocksize - 1);
+			guess_plaintext[blocksize - 1] = (char)c;
+
+			printf("guess_plaintext last char is %d (%d)\n", guess_plaintext[blocksize - 1], c);
+			char *guess_ciphertext = NULL;
+			size_t guess_ciphertext_len;
+			if (!aes_encryption_oracle_fixed_key_unknown_string(unknown_string, unknown_string_len, guess_plaintext, blocksize, &guess_ciphertext, &guess_ciphertext_len)) {
+				fprintf(stderr, "failed to encrypt guess ciphertext %d\n", c);
+				goto out;
+			}
+
+			char last_guess_ciphertext_char = guess_ciphertext[blocksize - 1];
+			//fprintf(stderr, "last char of guess_ciphertext: %d\n", (int)last_guess_ciphertext_char);
+
+			bool match = (last_ciphertext_char == last_guess_ciphertext_char);
+			free(guess_ciphertext);
+			guess_ciphertext = NULL;
+
+			if (match) {
+				printf("matched on %d character %zd is %d\n", last_guess_ciphertext_char, i, c);
+				plaintext_doctored[i + blocksize - 1] = c;
+				break;
+			}
+		}
+		if (c == 256) {
+			fprintf(stderr, "failed to find a match\n");
+		}
+	}
+
+	if (memcmp(unknown_string, plaintext_doctored + blocksize - 1, unknown_string_len) == 0) {
+		fprintf(stderr, "found unknown string\n");
+	} else {
+		fprintf(stderr, "wrong unknown string\n");
+	}
+
 out:
 	free(ciphertext);
+	free(plaintext_doctored);
 
 	return success;
 }
