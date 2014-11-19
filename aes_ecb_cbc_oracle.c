@@ -222,7 +222,7 @@ bool aes_ecb_byte_at_a_time_decrypt(const char *unknown_string, size_t unknown_s
 	size_t blocksize = 16;
 	char plaintext[blocksize];
 	memset(plaintext, 'a', blocksize);
-	char *plaintext_doctored = NULL;
+	char *unknown_string_guess = NULL;
 
 	if (unknown_string == NULL || unknown_string_len == 0) {
 		fprintf(stderr, "no unknown string\n");
@@ -265,143 +265,89 @@ bool aes_ecb_byte_at_a_time_decrypt(const char *unknown_string, size_t unknown_s
 	size_t unknown_string_len_guess = bare_unknown_string_ciphertext_len - (plaintext_len_guess - 1);
 
 	if (unknown_string_len_guess != unknown_string_len) {
-		fprintf(stderr, "Failed to guess unknown string length (guessed %zd, actually %zd)\n", unknown_string_len_guess, unknown_string_len);
+		fprintf(stderr, "AES ECB byte at a time: Failed to guess unknown string length (guessed %zd, actually %zd)\n", unknown_string_len_guess, unknown_string_len);
 		goto out;
 	}
 
-	fprintf(stderr, "length of unknown string: %zd\n", unknown_string_len_guess);
-
-	free(ciphertext);
-	ciphertext = NULL;
+	unknown_string_guess = calloc(1, unknown_string_len_guess);
+	if (unknown_string_guess == NULL) {
+		goto out;
+	}
 
 	// Guess each letter of plaintext
-	size_t plaintext_doctored_len = blocksize - 1 + unknown_string_len_guess;
-	plaintext_doctored = calloc(1, plaintext_doctored_len);
-	memset(plaintext_doctored, 'a', blocksize - 1);
-
 	for (size_t i = 0; i < unknown_string_len_guess; i++) {
-		char *curr_plaintext = plaintext_doctored + i;
 		char *curr_ciphertext = NULL;
 		size_t curr_ciphertext_len;
-		//fprintf(stderr, "curr_plaintext is %s\n", curr_plaintext);
-		if (!aes_encryption_oracle_fixed_key_unknown_string(unknown_string, unknown_string_len, curr_plaintext, blocksize - 1, &curr_ciphertext, &curr_ciphertext_len)) {
+		size_t curr_plaintext_len = blocksize - 1 - (i % blocksize);
+
+		// Encrypt an input that will put the target character of the unknown
+		// string at the end of a block in the ciphertext
+		if (!aes_encryption_oracle_fixed_key_unknown_string(unknown_string, unknown_string_len, plaintext, curr_plaintext_len, &curr_ciphertext, &curr_ciphertext_len)) {
 			fprintf(stderr, "failed to encrypt ciphertext %zd\n", i);
 			goto out;
 		}
 
-		// Account for padding to figure out what last byte of ciphertext is
-		char last_ciphertext_char = curr_ciphertext[blocksize - 1];
-		fprintf(stderr, "last char of curr_ciphertext: %d\n", (int)last_ciphertext_char);
+		// Construct a plaintext such that everything but the last character in
+		// a block looks like the string we just encrypted.
+		// Guess is what we just encrypted || the portion of the unknown string
+		// we have decrypted so far || current guess char
+		char guess_plaintext[256];
+		size_t guess_plaintext_len = curr_plaintext_len + i + 1;
+		if (guess_plaintext_len > sizeof(guess_plaintext)) {
+			fprintf(stderr, "guess plaintext buffer not large enough\n");
+			abort();
+		}
 
-		// Now we know that the character at position blocksize - 1 in
-		// curr_ciphertext is the encryption of the ith character in the unknown
-		// string. Since we control the first blocksize - 1 characters in the
-		// plaintext, we can easily brute force the remaining character to
-		// figure out the ith plaintext character.
-		char guess_plaintext[blocksize];
+		memcpy(guess_plaintext, plaintext, curr_plaintext_len);
+		memcpy(guess_plaintext + curr_plaintext_len, unknown_string_guess, i);
+
+		// Iterate over all characters until we find one such that the
+		// ciphertext block containing the current target character of the
+		// unknown string matches the ciphertext block from the encryption done
+		// above
 		int c;
 		for (c = 0; c < 256; c++) {
-			memcpy(guess_plaintext, plaintext_doctored + i, blocksize - 1);
-			guess_plaintext[blocksize - 1] = (char)c;
+			guess_plaintext[guess_plaintext_len - 1] = (char)c;
 
-			printf("guess_plaintext last char is %d (%d)\n", guess_plaintext[blocksize - 1], c);
 			char *guess_ciphertext = NULL;
 			size_t guess_ciphertext_len;
-			if (!aes_encryption_oracle_fixed_key_unknown_string(unknown_string, unknown_string_len, guess_plaintext, blocksize, &guess_ciphertext, &guess_ciphertext_len)) {
+			if (!aes_encryption_oracle_fixed_key_unknown_string(unknown_string, unknown_string_len, guess_plaintext, guess_plaintext_len, &guess_ciphertext, &guess_ciphertext_len)) {
 				fprintf(stderr, "failed to encrypt guess ciphertext %d\n", c);
 				goto out;
 			}
 
-			char last_guess_ciphertext_char = guess_ciphertext[blocksize - 1];
-			//fprintf(stderr, "last char of guess_ciphertext: %d\n", (int)last_guess_ciphertext_char);
+			bool match = memcmp(curr_ciphertext + i / blocksize * blocksize, guess_ciphertext + i / blocksize * blocksize, blocksize) == 0;
 
-			bool match = (last_ciphertext_char == last_guess_ciphertext_char);
 			free(guess_ciphertext);
 			guess_ciphertext = NULL;
 
 			if (match) {
-				printf("matched on %d character %zd is %d\n", last_guess_ciphertext_char, i, c);
-				plaintext_doctored[i + blocksize - 1] = c;
+				unknown_string_guess[i] = c;
 				break;
 			}
 		}
+		free(curr_ciphertext);
+		curr_ciphertext = NULL;
+
 		if (c == 256) {
 			fprintf(stderr, "failed to find a match\n");
+			goto out;
 		}
 	}
 
-	if (memcmp(unknown_string, plaintext_doctored + blocksize - 1, unknown_string_len) == 0) {
-		fprintf(stderr, "found unknown string\n");
+	if (memcmp(unknown_string, unknown_string_guess, unknown_string_len) == 0) {
+		success = true;
 	} else {
-		fprintf(stderr, "wrong unknown string\n");
+		fprintf(stderr, "AES ECB byte at a time: wrong unknown string\n");
 	}
 
 out:
+	free(unknown_string_guess);
 	free(ciphertext);
-	free(plaintext_doctored);
 
 	return success;
 }
-#if 0
 
-aaaaaaaaaaaaaaaa
-bonerbonerbonerb onerboner
-
-=>
-
-bbbbbbbbbbbbbbbb
-penispenispenisp enispenis
-
-
-aaaaaaaaaaaaaaab
-onerbonerbonerbo nerboner
-
-=>
-
-bbbbbbbbbbbbbbbp
-enispenispenispe nispenis
-
-
-aaaaaaaaaaaaaabo
-nerbonerbonerbon erboner
-
-=>
-
-bbbbbbbbbbbbbbpe
-nispenispenispen ispenis
-
-aaaaaaaaaaaaabon
-erbonerbonerbone rboner
-
-=>
-
-bbbbbbbbbbbbbpen
-ispenispenispeni spenis
-
-...
-
-abonerbonerboner
-bonerboner
-
-=>
-
-bpenispenispenis
-penispenis
-
-bonerbonerbonerb
-onerboner
-
-=>
-
-penispenispenisp
-enispenis
-
-aaaaaaaaaaaaaa => aaaaaaaaaaaaaabo
-aaaaaaaaaaaaaaba .. aaaaaaaaaaaaaabz
-
-the plaintext block I send in in order to guess char i of the unknown string is made up of the 15 preceding characters from the unknown string that I have decrypted so far
-if I don't know them yet, I use 'a
-#endif
 #if AES_ECB_CBC_ORACLE_TEST
 
 int main(int argc, char **argv)
@@ -426,20 +372,22 @@ int main(int argc, char **argv)
 	size_t base64_unknown_string_len;
 	char *base64_unknown_string = load_buffer_from_file(argv[1], &base64_unknown_string_len);
 	if (base64_unknown_string == NULL) {
-		fprintf(stderr, "AES ECB CBC oracle: failed to load Base64 unknown string from path %s\n", argv[1]);
+		fprintf(stderr, "AES ECB byte at a time decrypt: failed to load Base64 unknown string from path %s\n", argv[1]);
 		exit(-1);
 	}
 
 	size_t raw_unknown_string_len;
 	char *raw_unknown_string = base64_to_raw(base64_unknown_string, base64_unknown_string_len, &raw_unknown_string_len);
 	if (raw_unknown_string == NULL) {
-		fprintf(stderr, "AES ECB CBC oracle: failed to decode base64 input string\n");
+		fprintf(stderr, "AES ECB byte at a time decrypt: failed to decode base64 input string\n");
 	}
 
 	if (!aes_ecb_byte_at_a_time_decrypt(raw_unknown_string, raw_unknown_string_len)) {
-		fprintf(stderr, "AES ECB CBC oracle: failed to byte at a time decrypt ECB\n");
+		fprintf(stderr, "AES ECB byte at a time decrypt: failed to byte at a time decrypt ECB\n");
 		exit(-1);
 	}
+
+	printf("AES ECB byte at a time decrypt OK\n");
 
 	return 0;
 }
