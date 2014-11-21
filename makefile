@@ -63,5 +63,9 @@ aes_ecb_cbc_oracle_test: output_dirs aes_ecb_cbc_oracle.c aes_cbc.o aes_128_ecb.
 	$(CC) -DAES_ECB_CBC_ORACLE_TEST -o $(BIN)/aes_ecb_cbc_oracle $(OBJ)/aes_cbc.o $(OBJ)/aes_128_ecb.o $(OBJ)/pkcs7_padding.o $(OBJ)/xor_buffers.o $(OBJ)/utility.o $(OBJ)/hex_to_base64.o aes_ecb_cbc_oracle.c
 	$(BIN)/aes_ecb_cbc_oracle input/input_12.txt
 
+kv_parse_test: output_dirs
+	$(CC) -DKV_PARSE_TEST -o $(BIN)/kv_parse kv_parse.c
+	$(BIN)/kv_parse
+
 clean:
 	rm -rf $(BIN); rm -rf $(OBJ)
