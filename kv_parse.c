@@ -96,6 +96,54 @@ out:
 	return success ? dict : NULL;
 }
 
+char *unparse_profile(xpc_object_t profile)
+{
+	bool success = false;
+	char *unparsed = NULL;
+	__block size_t profile_len = 0;
+
+	if (profile == NULL || xpc_dictionary_get_count(profile) == 0) {
+		goto out;
+	}
+
+	// Compute profile size based on lengths of keys and values
+	xpc_dictionary_apply(profile, ^bool (const char *key, xpc_object_t value) {
+		profile_len += strlen(key);
+		profile_len += 1; // '='
+		profile_len += xpc_string_get_length(value);
+		profile_len += 1; // '&'
+
+		return true;
+	});
+
+	unparsed = malloc(profile_len);
+	if (unparsed == NULL) {
+		goto out;
+	}
+	unparsed[0] = '\0';
+
+	xpc_dictionary_apply(profile, ^bool (const char *key, xpc_object_t value) {
+		strlcat(unparsed, key, profile_len);
+		strlcat(unparsed, "=", profile_len);
+		strlcat(unparsed, xpc_string_get_string_ptr(value), profile_len);
+		strlcat(unparsed, "&", profile_len);
+
+		return true;
+	});
+
+	// Replace trailing '&' with NUL
+	unparsed[profile_len] = '\0';
+
+	success = true;
+out:
+	if (!success) {
+		free(unparsed);
+		unparsed = NULL;
+	}
+
+	return unparsed;
+}
+
 #if KV_PARSE_TEST
 
 int main()
@@ -167,6 +215,14 @@ int main()
 	if (dict == NULL) {
 		fprintf(stderr, "KV parse: failed to parse valid profile\n");
 		exit(-1);
+	}
+
+	char *unparsed = unparse_profile(dict);
+	if (unparsed == NULL) {
+		fprintf(stderr, "KV parse: failed to unparse profile\n");
+		exit(-1);
+	} else {
+		printf("unparsed: %s\n", unparsed);
 	}
 
 	value = xpc_dictionary_get_string(dict, "foo");
