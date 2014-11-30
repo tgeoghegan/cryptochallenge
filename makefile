@@ -7,7 +7,7 @@ output_dirs:
 
 all: tests
 
-tests: base64_test repeating_key_xor_test decrypt_single_char_xor_test xor_buffers_test aes_128_ecb_test pkcs7_padding_test aes_cbc_test aes_ecb_cbc_oracle_test
+tests: base64_test repeating_key_xor_test decrypt_single_char_xor_test xor_buffers_test aes_128_ecb_test pkcs7_padding_test aes_cbc_test aes_ecb_cbc_oracle_test kv_parse_test
 
 base64_test: output_dirs hex_to_base64.c
 	$(CC) -DBASE64_TEST -o $(BIN)/hex_to_base64 hex_to_base64.c
@@ -63,9 +63,12 @@ aes_ecb_cbc_oracle_test: output_dirs aes_ecb_cbc_oracle.c aes_cbc.o aes_128_ecb.
 	$(CC) -DAES_ECB_CBC_ORACLE_TEST -o $(BIN)/aes_ecb_cbc_oracle $(OBJ)/aes_cbc.o $(OBJ)/aes_128_ecb.o $(OBJ)/pkcs7_padding.o $(OBJ)/xor_buffers.o $(OBJ)/utility.o $(OBJ)/hex_to_base64.o aes_ecb_cbc_oracle.c
 	$(BIN)/aes_ecb_cbc_oracle input/input_12.txt
 
-kv_parse_test: output_dirs
-	$(CC) -DKV_PARSE_TEST -o $(BIN)/kv_parse kv_parse.c
+kv_parse_test: output_dirs kv_parse.c aes_128_ecb.o pkcs7_padding.o
+	$(CC) -DKV_PARSE_TEST -o $(BIN)/kv_parse $(OBJ)/aes_128_ecb.o $(OBJ)/pkcs7_padding.o kv_parse.c
 	$(BIN)/kv_parse
+
+kv_parse.o: output_dirs kv_parse.c
+	$(CC) -o $(OBJ)/kv_parse.o -c kv_parse.c
 
 clean:
 	rm -rf $(BIN); rm -rf $(OBJ)
