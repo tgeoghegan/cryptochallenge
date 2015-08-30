@@ -109,7 +109,7 @@ int guess_key(const char *ciphertext, size_t ciphertext_len, size_t key_len, cha
 
 		char *transpose_block = calloc(1, transpose_block_len);
 		if (transpose_block == NULL) {
-			fprintf(stderr, "failed to allocate buffer\n");
+			print_fail("failed to allocate buffer");
 			return -1;
 		}
 
@@ -127,7 +127,7 @@ int guess_key(const char *ciphertext, size_t ciphertext_len, size_t key_len, cha
 	if (out_key) {
 		*out_key = calloc(1, key_len + 1);
 		if (*out_key == NULL) {
-			fprintf(stderr, "failed to allocate key buffer\n");
+			print_fail("failed to allocate key buffer");
 			return -1;
 		}
 		memcpy(*out_key, key, sizeof(key));
@@ -148,18 +148,18 @@ int main(int argc, char **argv)
 	char *pretty_ciphertext = hex_print_string(ciphertext, strlen(ciphertext));
 
 	if (strncmp(expected_ciphertext, pretty_ciphertext, strlen(expected_ciphertext)) == 0) {
-		printf("repeating XOR encrypt OK\n");
+		print_success("repeating XOR encrypt OK");
 	} else {
-		fprintf(stderr, "repeating XOR encrypt wrong\n");
+		print_fail("repeating XOR encrypt wrong");
 		exit(-1);
 	}
 
 	char *reverse_encrypt = repeating_key_xor(ciphertext, strlen(ciphertext), key, strlen(key));
 	if (!reverse_encrypt || strcmp(reverse_encrypt, plaintext) != 0) {
-		fprintf(stderr, "reverse repeating XOR encryption wrong: %s\n", reverse_encrypt);
+		print_fail("reverse repeating XOR encryption wrong: %s", reverse_encrypt);
 		exit(-1);
 	} else {
-		printf("reverse repeating XOR encryption OK\n");
+		print_success("reverse repeating XOR encryption OK");
 	}
 	free(reverse_encrypt);
 	free(ciphertext);
@@ -169,9 +169,9 @@ int main(int argc, char **argv)
 	const char *rhs = "wokka wokka!!!";
 	int distance = bitwise_hamming_distance(lhs, strlen(lhs), rhs, strlen(rhs));
 	if (distance == 37) {
-		printf("hamming OK\n");
+		print_success("hamming OK");
 	} else {
-		fprintf(stderr, "hamming wrong: %d\n", distance);
+		print_fail("hamming wrong: %d", distance);
 		exit(-1);
 	}
 
@@ -182,21 +182,21 @@ int main(int argc, char **argv)
 	size_t size;
 	char *buf = load_buffer_from_file(argv[1], &size);
 	if (buf == NULL) {
-		fprintf(stderr, "failed to load file\n");
+		print_fail("failed to load file");
 		exit(-1);
 	}
 
 	size_t raw_len;
 	char *raw_bytes = base64_to_raw(buf, size, &raw_len);
 	if (raw_bytes == NULL) {
-		fprintf(stderr, "failed to decode Base64 input\n");
+		print_fail("failed to decode Base64 input");
 		exit(-1);
 	}
 
 	int key_len_count = 5;
 	int *key_lens = guess_key_lengths(raw_bytes, raw_len, key_len_count);
 	if (!key_lens) {
-		fprintf(stderr, "failed to guess repeating xor key lengths\n");
+		print_fail("failed to guess repeating xor key lengths");
 		exit(-1);
 	}
 
@@ -207,13 +207,13 @@ int main(int argc, char **argv)
 		char *likely_key = NULL;
 
 		if (guess_key(raw_bytes, raw_len, key_lens[i], &likely_key) != 0) {
-			fprintf(stderr, "failed to guess repeating xor key\n");
+			print_fail("failed to guess repeating xor key");
 			exit(-1);
 		}
 
 		char *decrypted = repeating_key_xor(raw_bytes, raw_len, likely_key, key_lens[i]);
 		if (decrypted == NULL) {
-			fprintf(stderr, "failed to decrypt repeating xor\n");
+			print_fail("failed to decrypt repeating xor");
 			exit(-1);
 		}
 
@@ -231,28 +231,28 @@ int main(int argc, char **argv)
 	}
 
 	if (best_englishness == FLT_MAX) {
-		fprintf(stderr, "repeating xor: failed to find any English plaintext\n");
+		print_fail("repeating xor: failed to find any English plaintext");
 		exit(-1);
 	}
 
 	if (best_key == NULL || strcmp(best_key, "Terminator X: Bring the noise") != 0) {
-		fprintf(stderr, "repeating xor: guessed wrong key: %s\n", best_key);
+		print_fail("repeating xor: guessed wrong key: %s", best_key);
 		exit(-1);
 	}
 
 	size_t decrypted_size;
 	char *decrypted_verify = load_buffer_from_file(argv[2], &decrypted_size);
 	if (decrypted_verify == NULL) {
-		fprintf(stderr, "failed to open verify file %s\n", argv[2]);
+		print_fail("failed to open verify file %s", argv[2]);
 		exit(-1);
 	}
 
 	if (strncmp(best_decrypted, decrypted_verify, decrypted_size) != 0) {
-		fprintf(stderr, "decryption for repeating xor failed: %s\n", best_decrypted);
+		print_fail("decryption for repeating xor failed: %s", best_decrypted);
 		exit(-1);
 	}
 
-	printf("decrypt repeating key xor OK\n");
+	print_success("decrypt repeating key xor OK");
 
 	free(decrypted_verify);
 	free(best_key);

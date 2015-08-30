@@ -4,6 +4,7 @@
 #include <stdbool.h>
 
 #include "hex_to_base64.h"
+#include "utility.h"
 
 static const char *base64_map = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
@@ -206,7 +207,7 @@ int main(void)
 	size_t len = strlen(input);
 	char *output = hex_to_base64(input, len);
 	if (!output || strcmp(output, "SSdtIGtpbGxpbmcgeW91ciBicmFpbiBsaWtlIGEgcG9pc29ub3VzIG11c2hyb29t") != 0) {
-		fprintf(stderr, "base64 conversion failed: %s -> %s\n", input, output);
+		print_fail("base64 conversion failed: %s -> %s", input, output);
 		exit(-1);
 	}
 
@@ -215,7 +216,7 @@ int main(void)
 	if (original) {
 		original_hex = hex_print_string(original, strlen(original));
 		if (!original_hex || strcmp(original_hex, input) != 0) {
-			fprintf(stderr, "conversion to hex failed: %s -> %s -> %s\n", input, output, original_hex);
+			print_fail("conversion to hex failed: %s -> %s -> %s", input, output, original_hex);
 			exit(-1);
 		}
 
@@ -230,7 +231,7 @@ int main(void)
 
 	output = hex_to_base64(input2, strlen(input2));
 	if (!output || strcmp(output, "SSdtIGtpbGxpbmcgeW91ciBicmFpbiBsaWtlIGEgcG9pc29ub3VzIG11c2hyb28=") != 0) {
-		fprintf(stderr, "base64 conversion failed: %s -> %s\n", input2, output);
+		print_fail("base64 conversion failed: %s -> %s", input2, output);
 		exit(-1);
 	}
 
@@ -238,7 +239,7 @@ int main(void)
 	if (original) {
 		original_hex = hex_print_string(original, strlen(original));
 		if (!original_hex || strcmp(original_hex, input2) != 0) {
-			fprintf(stderr, "conversion to hex failed: %s -> %s -> %s\n", input2, output, original_hex);
+			print_fail("conversion to hex failed: %s -> %s -> %s", input2, output, original_hex);
 			exit(-1);
 		}
 
@@ -253,7 +254,7 @@ int main(void)
 
 	output = hex_to_base64(input3, strlen(input3));
 	if (!output || strcmp(output, "SSdtIGtpbGxpbmcgeW91ciBicmFpbiBsaWtlIGEgcG9pc29ub3VzIG11c2hybw==") != 0) {
-		fprintf(stderr, "Base64 conversion failed: %s -> %s\n", input3, output);
+		print_fail("Base64 conversion failed: %s -> %s", input3, output);
 		exit(-1);
 	}
 
@@ -261,7 +262,7 @@ int main(void)
 	if (original) {
 		original_hex = hex_print_string(original, strlen(original));
 		if (!original_hex || strcmp(original_hex, input3) != 0) {
-			fprintf(stderr, "conversion to hex failed: %s -> %s -> %s\n", input3, output, original_hex);
+			print_fail("conversion to hex failed: %s -> %s -> %s", input3, output, original_hex);
 			exit(-1);
 		}
 
@@ -274,7 +275,7 @@ int main(void)
 	free(output);
 	output = NULL;
 
-	printf("base64 OK\n");
+	print_success("base64 OK");
 	return 0;
 }
 

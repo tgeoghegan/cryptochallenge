@@ -6,6 +6,7 @@
 #include "kv_parse.h"
 #include "aes_128_ecb.h"
 #include "pkcs7_padding.h"
+#include "utility.h"
 
 #define PAIR_SEP 	'='
 #define RECORD_SEP 	'&'
@@ -152,6 +153,13 @@ static int uid = 0;
 
 char *profile_for(const char *email)
 {
+	char *profile_string = NULL;
+
+	// email may not contain '=' or '&'
+	if (strchr(email, RECORD_SEP) != NULL || strchr(email, PAIR_SEP) != 0) {
+		return NULL;
+	}
+
 	xpc_object_t profile = xpc_dictionary_create(NULL, NULL, 0);
 	if (profile == NULL) {
 		return NULL;
@@ -164,7 +172,10 @@ char *profile_for(const char *email)
 	uid++;
 	xpc_dictionary_set_string(profile, "role", "user");
 
-	return unparse_profile(profile);
+	profile_string = unparse_profile(profile);
+	xpc_release(profile);
+
+	return profile_string;
 }
 
 static char *aes_key = NULL;
@@ -260,48 +271,48 @@ int main()
 {
 	xpc_object_t dict = xpc_dictionary_create(NULL, NULL, 0);
 	if (!parse_pair_into_dict(dict, "foo=bar")) {
-		fprintf(stderr, "KV parse: failed to parse valid pair\n");
+		print_fail("KV parse: failed to parse valid pair");
 		exit(-1);
 	}
 
 	const char *value = xpc_dictionary_get_string(dict, "foo");
 	if (!value || strcmp(value, "bar") != 0) {
-		fprintf(stderr, "KV parse: wrong key in dict\n");
+		print_fail("KV parse: wrong key in dict");
 	}
 
 	if (parse_pair_into_dict(dict, "blat")) {
-		fprintf(stderr, "KV parse: parsed bad string\n");
+		print_fail("KV parse: parsed bad string");
 		exit(-1);
 	}
 
 	value = xpc_dictionary_get_string(dict, "blat");
 	if (value) {
-		fprintf(stderr, "KV parse: unexpected key in dict\n");
+		print_fail("KV parse: unexpected key in dict");
 		exit(-1);
 	}
 
 	if (parse_pair_into_dict(dict, "qux=fux&")) {
-		fprintf(stderr, "KV parse: parsed bad string\n");
+		print_fail("KV parse: parsed bad string");
 		exit(-1);
 	}
 
 	if (parse_pair_into_dict(dict, "&qux=fux&")) {
-		fprintf(stderr, "KV parse: parsed bad string\n");
+		print_fail("KV parse: parsed bad string");
 		exit(-1);
 	}
 
 	if (parse_pair_into_dict(dict, "&qux=fux&")) {
-		fprintf(stderr, "KV parse: parsed bad string\n");
+		print_fail("KV parse: parsed bad string");
 		exit(-1);
 	}
 
 	if (xpc_dictionary_get_string(dict, "qux") || xpc_dictionary_get_string(dict, "fux") || xpc_dictionary_get_string(dict, "&") || xpc_dictionary_get_string(dict, "&qux") || xpc_dictionary_get_string(dict, "fux&")) {
-		fprintf(stderr, "KV parse: parsed bad string\n");
+		print_fail("KV parse: parsed bad string");
 		exit(-1);
 	}
 
 	if (parse_pair_into_dict(dict, "foo=bar=baz")) {
-		fprintf(stderr, "KV parse: parsed bad string\n");
+		print_fail("KV parse: parsed bad string");
 		exit(-1);
 	}
 
@@ -309,13 +320,13 @@ int main()
 
 	dict = parse_profile("foo=bar");
 	if (dict == NULL) {
-		fprintf(stderr, "KV parse: failed to parse valid profile\n");
+		print_fail("KV parse: failed to parse valid profile");
 		exit(-1);
 	}
 
 	value = xpc_dictionary_get_string(dict, "foo");
 	if (!value || strcmp(value, "bar") != 0) {
-		fprintf(stderr, "KV parse: fwrong value in dict\n");
+		print_fail("KV parse: fwrong value in dict");
 		exit(-1);
 	}
 
@@ -325,13 +336,13 @@ int main()
 	char *profile_backwards = "qux=blat&foo=bar";
 	dict = parse_profile(profile);
 	if (dict == NULL) {
-		fprintf(stderr, "KV parse: failed to parse valid profile\n");
+		print_fail("KV parse: failed to parse valid profile");
 		exit(-1);
 	}
 
 	xpc_object_t dict_backwards = parse_profile(profile_backwards);
 	if (dict_backwards == NULL) {
-		fprintf(stderr, "KV parse: failed to parse valid profile\n");
+		print_fail("KV parse: failed to parse valid profile");
 		exit(-1);
 	}
 
@@ -341,7 +352,7 @@ int main()
 		|| xpc_dictionary_get_string(dict_backwards, "qux") == NULL || strcmp(xpc_dictionary_get_string(dict_backwards, "qux"), "blat") != 0) {
 		char *desc = xpc_copy_description(dict);
 		char *desc_backwards = xpc_copy_description(dict_backwards);
-		fprintf(stderr, "KV parse: incorrect parse of valid profiles (%s\n%s)\n", desc, desc_backwards);
+		print_fail("KV parse: incorrect parse of valid profiles (%s\n%s)", desc, desc_backwards);
 		free(desc);
 		free(desc_backwards);
 		exit(-1);
@@ -351,24 +362,24 @@ int main()
 
 	char *unparsed = unparse_profile(dict);
 	if (unparsed == NULL) {
-		fprintf(stderr, "KV parse: failed to unparse profile\n");
+		print_fail("KV parse: failed to unparse profile");
 		exit(-1);
 	}
 
 	if (strcmp(unparsed, profile) != 0 && strcmp(unparsed, profile_backwards) != 0) {
-		fprintf(stderr, "KV parse: incorrect profile unparse: %s\n", unparsed);
+		print_fail("KV parse: incorrect profile unparse: %s", unparsed);
 		exit(-1);
 	}
 
 	value = xpc_dictionary_get_string(dict, "foo");
 	if (!value || strcmp(value, "bar") != 0) {
-		fprintf(stderr, "KV parse: fwrong value in dict\n");
+		print_fail("KV parse: fwrong value in dict");
 		exit(-1);
 	}
 
 	value = xpc_dictionary_get_string(dict, "qux");
 	if (!value || strcmp(value, "blat") != 0) {
-		fprintf(stderr, "KV parse: fwrong value in dict\n");
+		print_fail("KV parse: fwrong value in dict");
 		exit(-1);
 	}
 
@@ -376,31 +387,31 @@ int main()
 
 	dict = parse_profile("foo=bar&qux=blat&");
 	if (dict != NULL) {
-		fprintf(stderr, "KV parse: parsed invalid profile\n");
+		print_fail("KV parse: parsed invalid profile");
 		exit(-1);
 	}
 
 	dict = parse_profile("&foo=bar&qux=blat&");
 	if (dict != NULL) {
-		fprintf(stderr, "KV parse: parsed invalid profile\n");
+		print_fail("KV parse: parsed invalid profile");
 		exit(-1);
 	}
 
 	dict = parse_profile("foo=bar=bat&qux=fux");
 	if (dict != NULL) {
-		fprintf(stderr, "KV parse: parsed invalid profile\n");
+		print_fail("KV parse: parsed invalid profile");
 		exit(-1);
 	}
 
 	char *user_profile = profile_for("joe@blow.com");
 	if (user_profile == NULL) {
-		fprintf(stderr, "KV parse: failed to create profile\n");
+		print_fail("KV parse: failed to create profile");
 		exit(-1);
 	}
 
 	dict = parse_profile(user_profile);
 	if (dict == NULL) {
-		fprintf(stderr, "KV parse: failed to parse user profile\n");
+		print_fail("KV parse: failed to parse user profile");
 		exit(-1);
 	}
 
@@ -408,7 +419,7 @@ int main()
 		|| xpc_dictionary_get_string(dict, "uid") == NULL || strcmp(xpc_dictionary_get_string(dict, "uid"), "0") != 0
 		|| xpc_dictionary_get_string(dict, "role") == NULL || strcmp(xpc_dictionary_get_string(dict, "role"), "user") != 0
 		|| xpc_dictionary_get_count(dict) != 3) {
-		fprintf(stderr, "KV parse: unexpected values in user profile %s\n", user_profile);
+		print_fail("KV parse: unexpected values in user profile %s", user_profile);
 		exit(-1);
 	}
 
@@ -418,13 +429,13 @@ int main()
 
 	user_profile = profile_for("jane@blow.com");
 	if (user_profile == NULL) {
-		fprintf(stderr, "KV parse: failed to create profile\n");
+		print_fail( "KV parse: failed to create profile");
 		exit(-1);
 	}
 
 	dict = parse_profile(user_profile);
 	if (dict == NULL) {
-		fprintf(stderr, "KV parse: failed to parse user profile\n");
+		print_fail("KV parse: failed to parse user profile");
 		exit(-1);
 	}
 
@@ -432,7 +443,7 @@ int main()
 		|| xpc_dictionary_get_string(dict, "uid") == NULL || strcmp(xpc_dictionary_get_string(dict, "uid"), "1") != 0
 		|| xpc_dictionary_get_string(dict, "role") == NULL || strcmp(xpc_dictionary_get_string(dict, "role"), "user") != 0
 		|| xpc_dictionary_get_count(dict) != 3) {
-		fprintf(stderr, "KV parse: unexpected values in user profile %s\n", user_profile);
+		print_fail("KV parse: unexpected values in user profile %s", user_profile);
 		exit(-1);
 	}
 
@@ -440,16 +451,40 @@ int main()
 	xpc_release(dict);
 	dict = NULL;
 
+	user_profile = profile_for("joe@blow.com&");
+	if (user_profile != NULL) {
+		print_fail("KV parse: generated profile for invalid email address: %s", user_profile);
+		exit(-1);
+	}
+
+	user_profile = profile_for("joe@blow.com=");
+	if (user_profile != NULL) {
+		print_fail("KV parse: generated profile for invalid email address: %s", user_profile);
+		exit(-1);
+	}
+
+	user_profile = profile_for("joe@blow.com&role=admin");
+	if (user_profile != NULL) {
+		print_fail("KV parse: generated profile for invalid email address: %s", user_profile);
+		exit(-1);
+	}
+
+	user_profile = profile_for("role=admin");
+	if (user_profile != NULL) {
+		print_fail("KV parse: generated profile for invalid email address: %s", user_profile);
+		exit(-1);
+	}
+
 	char *encrypted_profile = NULL;
 	size_t encrypted_profile_len = 0;
 	if (!encrypted_profile_for("joe@blow.com", &encrypted_profile, &encrypted_profile_len)) {
-		fprintf(stderr, "KV parse: failed to generate encrypted profile\n");
+		print_fail("KV parse: failed to generate encrypted profile");
 		exit(-1);
 	}
 
 	dict = parse_encrypted_profile(encrypted_profile, encrypted_profile_len);
 	if (dict == NULL) {
-		fprintf(stderr, "KV parse: failed to decrypt profile\n");
+		print_fail("KV parse: failed to decrypt profile");
 		exit(-1);
 	}
 
@@ -458,7 +493,7 @@ int main()
 		|| xpc_dictionary_get_string(dict, "role") == NULL || strcmp(xpc_dictionary_get_string(dict, "role"), "user") != 0
 		|| xpc_dictionary_get_count(dict) != 3) {
 		char *desc = xpc_copy_description(dict);
-		fprintf(stderr, "KV parse: unexpected values in user profile %s\n", desc);
+		print_fail("KV parse: unexpected values in user profile %s", desc);
 		free(desc);
 		exit(-1);
 	}
@@ -466,7 +501,7 @@ int main()
 	xpc_release(dict);
 	free(encrypted_profile);
 
-	printf("KV parse OK\n");
+	print_success("KV parse OK");
 
 	return 0;
 }

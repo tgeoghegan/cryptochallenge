@@ -3,6 +3,7 @@
 #include <stdlib.h>
 
 #include "xor_buffers.h"
+#include "utility.h"
 
 void xor_buffers(const char *buffer1, const char *buffer2, char *out_buffer, size_t len)
 {
@@ -23,9 +24,9 @@ int main(void)
 
 	xor_buffers(buffer1, buffer2, result, sizeof(buffer1));
 	if (memcmp(result, expected_result, sizeof(expected_result)) == 0) {
-		printf("xor_buffers OK\n");
+		print_success("xor_buffers OK");
 	} else {
-		fprintf(stderr, "xor_buffers failed\n");
+		print_fail("xor_buffers failed");
 		exit(-1);
 	}
 

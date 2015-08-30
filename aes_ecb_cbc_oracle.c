@@ -153,7 +153,7 @@ bool aes_encryption_oracle_fixed_key_unknown_string(const char *unknown_string, 
 
 	doctored_plaintext = calloc(1, doctored_plaintext_len);
 	if (doctored_plaintext == NULL) {
-		fprintf(stderr, "failed to allocate doctored plaintext\n");
+		print_fail("failed to allocate doctored plaintext");
 		goto out;
 	}
 
@@ -162,7 +162,7 @@ bool aes_encryption_oracle_fixed_key_unknown_string(const char *unknown_string, 
 
 	size_t ciphertext_len;
 	if (!aes_ecb_encryption_oracle(doctored_plaintext, doctored_plaintext_len, &ciphertext, &ciphertext_len, NULL)) {
-		fprintf(stderr, "failed to encrypt doctored plaintext\n");
+		print_fail("failed to encrypt doctored plaintext");
 		goto out;
 	}
 
@@ -199,7 +199,7 @@ bool aes_encryption_oracle_is_cbc(aes_encryption_oracle_t oracle, bool *correct)
 	size_t ciphertext_len;
 	bool used_cbc = false;
 	if (!oracle(plaintext, sizeof(plaintext), &ciphertext, &ciphertext_len, &used_cbc)) {
-		fprintf(stderr, "oracle failed to encrypt plaintext\n");
+		print_fail("oracle failed to encrypt plaintext");
 		return false;
 	}
 
@@ -225,13 +225,13 @@ bool aes_ecb_byte_at_a_time_decrypt(const char *unknown_string, size_t unknown_s
 	char *unknown_string_guess = NULL;
 
 	if (unknown_string == NULL || unknown_string_len == 0) {
-		fprintf(stderr, "no unknown string\n");
+		print_fail("no unknown string");
 		goto out;
 	}
 
 	// Ensure ECB is in use
 	if (aes_encryption_oracle_is_cbc(aes_ecb_encryption_oracle, NULL)) {
-		fprintf(stderr, "AES ECB byte at a time: oracle is not ECB\n");
+		print_fail("AES ECB byte at a time: oracle is not ECB");
 		goto out;
 	}
 
@@ -249,7 +249,7 @@ bool aes_ecb_byte_at_a_time_decrypt(const char *unknown_string, size_t unknown_s
 	for (plaintext_len_guess = 0; plaintext_len_guess < blocksize; plaintext_len_guess++) {
 		size_t ciphertext_len;
 		if (!aes_encryption_oracle_fixed_key_unknown_string(unknown_string, unknown_string_len, plaintext, plaintext_len_guess, &ciphertext, &ciphertext_len)) {
-			fprintf(stderr, "AES ECB byte at a time: failed to encrypt string\n");
+			print_fail("AES ECB byte at a time: failed to encrypt string");
 			goto out;
 		}
 
@@ -265,7 +265,7 @@ bool aes_ecb_byte_at_a_time_decrypt(const char *unknown_string, size_t unknown_s
 	size_t unknown_string_len_guess = bare_unknown_string_ciphertext_len - (plaintext_len_guess - 1);
 
 	if (unknown_string_len_guess != unknown_string_len) {
-		fprintf(stderr, "AES ECB byte at a time: Failed to guess unknown string length (guessed %zd, actually %zd)\n", unknown_string_len_guess, unknown_string_len);
+		print_fail("AES ECB byte at a time: Failed to guess unknown string length (guessed %zd, actually %zd)", unknown_string_len_guess, unknown_string_len);
 		goto out;
 	}
 
@@ -283,7 +283,7 @@ bool aes_ecb_byte_at_a_time_decrypt(const char *unknown_string, size_t unknown_s
 		// Encrypt an input that will put the target character of the unknown
 		// string at the end of a block in the ciphertext
 		if (!aes_encryption_oracle_fixed_key_unknown_string(unknown_string, unknown_string_len, plaintext, curr_plaintext_len, &curr_ciphertext, &curr_ciphertext_len)) {
-			fprintf(stderr, "failed to encrypt ciphertext %zd\n", i);
+			print_fail("failed to encrypt ciphertext %zd", i);
 			goto out;
 		}
 
@@ -294,8 +294,8 @@ bool aes_ecb_byte_at_a_time_decrypt(const char *unknown_string, size_t unknown_s
 		char guess_plaintext[256];
 		size_t guess_plaintext_len = curr_plaintext_len + i + 1;
 		if (guess_plaintext_len > sizeof(guess_plaintext)) {
-			fprintf(stderr, "guess plaintext buffer not large enough\n");
-			abort();
+			print_fail("guess plaintext buffer not large enough");
+			goto out;		
 		}
 
 		memcpy(guess_plaintext, plaintext, curr_plaintext_len);
@@ -312,7 +312,7 @@ bool aes_ecb_byte_at_a_time_decrypt(const char *unknown_string, size_t unknown_s
 			char *guess_ciphertext = NULL;
 			size_t guess_ciphertext_len;
 			if (!aes_encryption_oracle_fixed_key_unknown_string(unknown_string, unknown_string_len, guess_plaintext, guess_plaintext_len, &guess_ciphertext, &guess_ciphertext_len)) {
-				fprintf(stderr, "failed to encrypt guess ciphertext %d\n", c);
+				print_fail("failed to encrypt guess ciphertext %d", c);
 				goto out;
 			}
 
@@ -330,7 +330,7 @@ bool aes_ecb_byte_at_a_time_decrypt(const char *unknown_string, size_t unknown_s
 		curr_ciphertext = NULL;
 
 		if (c == 256) {
-			fprintf(stderr, "failed to find a match\n");
+			print_fail("failed to find a match");
 			goto out;
 		}
 	}
@@ -338,7 +338,7 @@ bool aes_ecb_byte_at_a_time_decrypt(const char *unknown_string, size_t unknown_s
 	if (memcmp(unknown_string, unknown_string_guess, unknown_string_len) == 0) {
 		success = true;
 	} else {
-		fprintf(stderr, "AES ECB byte at a time: wrong unknown string\n");
+		print_fail("AES ECB byte at a time: wrong unknown string");
 	}
 
 out:
@@ -356,38 +356,38 @@ int main(int argc, char **argv)
 		bool correct;
 		if (aes_encryption_oracle_is_cbc(aes_encryption_oracle_random, &correct)) {
 			if (!correct) {
-				fprintf(stderr, "AES ECB CBC oracle: guessed wrong\n");
+				print_fail("AES ECB CBC oracle: guessed wrong");
 				exit(-1);
 			}
 		}
 	}
 
-	printf("AES ECB CBC oracle OK\n");
+	print_success("AES ECB CBC oracle OK");
 
 	if (argc < 2) {
-		fprintf(stderr, "AES ECB CBC oracle: bad arguments\n");
+		print_fail("AES ECB CBC oracle: bad arguments");
 		exit(-1);
 	}
 
 	size_t base64_unknown_string_len;
 	char *base64_unknown_string = load_buffer_from_file(argv[1], &base64_unknown_string_len);
 	if (base64_unknown_string == NULL) {
-		fprintf(stderr, "AES ECB byte at a time decrypt: failed to load Base64 unknown string from path %s\n", argv[1]);
+		print_fail("AES ECB byte at a time decrypt: failed to load Base64 unknown string from path %s", argv[1]);
 		exit(-1);
 	}
 
 	size_t raw_unknown_string_len;
 	char *raw_unknown_string = base64_to_raw(base64_unknown_string, base64_unknown_string_len, &raw_unknown_string_len);
 	if (raw_unknown_string == NULL) {
-		fprintf(stderr, "AES ECB byte at a time decrypt: failed to decode base64 input string\n");
+		print_fail("AES ECB byte at a time decrypt: failed to decode base64 input string");
 	}
 
 	if (!aes_ecb_byte_at_a_time_decrypt(raw_unknown_string, raw_unknown_string_len)) {
-		fprintf(stderr, "AES ECB byte at a time decrypt: failed to byte at a time decrypt ECB\n");
+		print_fail("AES ECB byte at a time decrypt: failed to byte at a time decrypt ECB");
 		exit(-1);
 	}
 
-	printf("AES ECB byte at a time decrypt OK\n");
+	print_success("AES ECB byte at a time decrypt OK");
 
 	return 0;
 }

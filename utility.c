@@ -9,6 +9,7 @@
 #include <sys/uio.h>
 #include <unistd.h>
 #include <stdbool.h>
+#include <stdarg.h>
 
 #include "utility.h"
 
@@ -99,4 +100,34 @@ void dump_hex_label(FILE *filedes, char *label, char *string, size_t len)
 {
 	fprintf(filedes, "%s:\t", label);
 	dump_hex_fd(filedes, string, len);
+}
+
+static void print_color(bool success, const char *format, va_list ap)
+{
+	int color = 31;
+	FILE *outfd = stderr;
+	if (success) {
+		color = 32;
+		outfd = stdout;
+	}
+
+	fprintf(outfd, "\033[0;%dm", color);
+	vfprintf(outfd, format, ap);
+	fprintf(outfd, "\033[0m\n");
+}
+
+void print_success(const char *format, ...)
+{
+	va_list ap;
+	va_start(ap, format);
+	print_color(true, format, ap);
+	va_end(ap);
+}
+
+void print_fail(const char *format, ...)
+{
+	va_list(ap);
+	va_start(ap, format);
+	print_color(false, format, ap);
+	va_end(ap);
 }

@@ -9,6 +9,7 @@
 
 #include "decrypt_single_char_xor.h"
 #include "hex_to_base64.h"
+#include "utility.h"
 
 static void pretty_print(const char *string, size_t len);
 
@@ -197,7 +198,7 @@ int main(int argc, char **argv)
 	if (argc == 2) {
 		FILE *input = fopen(argv[1], "r");
 		if (input == NULL) {
-			fprintf(stderr, "failed to open input '%s': %s\n", argv[1], strerror(errno));
+			print_fail("failed to open input '%s': %s", argv[1], strerror(errno));
 			exit(-1);
 		}
 
@@ -226,10 +227,10 @@ int main(int argc, char **argv)
 		fclose(input);
 
 		if (!best_string || strcmp(best_string, "Now that the party is jumping\n") != 0) {
-			fprintf(stderr, "wrong best string %s\n", best_string);
+			print_fail("wrong best string %s", best_string);
 			exit(-1);
 		} else {
-			printf("single char xor test OK\n");
+			print_success("single char xor test OK");
 		}
 
 		free(best_string);
@@ -238,10 +239,10 @@ int main(int argc, char **argv)
 		char *best = NULL;
 		best_string_from_encrypted(false, encrypted, strlen(encrypted), &best, NULL);
 		if (!best || strcmp(best, "Cooking MC's like a pound of bacon") != 0) {
-			fprintf(stderr, "wrong best string %s\n", best);
+			print_fail("wrong best string %s", best);
 			exit(-1);
 		} else {
-			printf("simple single char xor test OK\n");
+			print_success("simple single char xor test OK");
 		}
 	}
 

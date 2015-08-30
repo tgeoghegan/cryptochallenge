@@ -15,7 +15,7 @@ int aes_128_ecb_encrypt(const char *plaintext, size_t plaintext_len, const char 
 	CCCryptorStatus status = CCCrypt(kCCEncrypt, kCCAlgorithmAES, kCCOptionECBMode, key, key_len, NULL, plaintext, plaintext_len, ciphertext, plaintext_len + 16, &ciphertext_len);
 	if (status != kCCSuccess) {
 		free(ciphertext);
-		fprintf(stderr, "failed to encrypt: %d\n", status);
+		print_fail("failed to encrypt: %d", status);
 		return -1;
 	}
 
@@ -40,7 +40,7 @@ int aes_128_ecb_decrypt(const char *ciphertext, size_t ciphertext_len, const cha
 	CCCryptorStatus status = CCCrypt(kCCDecrypt, kCCAlgorithmAES, kCCOptionECBMode, key, key_len, NULL, ciphertext, ciphertext_len, plaintext, ciphertext_len, &plaintext_len);
 	if (status != kCCSuccess) {
 		free(plaintext);
-		fprintf(stderr, "failed to decrypt: %d\n", status);
+		print_fail("failed to decrypt: %d", status);
 		return -1;
 	}
 
@@ -77,7 +77,7 @@ char *aes_generate_key(void)
 	void *key = calloc(1, 16);
 	CCRNGStatus status = CCRandomGenerateBytes(key, 16);
 	if (status != kCCSuccess) {
-		fprintf(stderr, "failed to generate AES key: %d\n", status);
+		print_fail("failed to generate AES key: %d", status);
 		free(key);
 		return NULL;
 	}
@@ -90,40 +90,40 @@ char *aes_generate_key(void)
 int main(int argc, char **argv)
 {
 	if (argc < 4) {
-		fprintf(stderr, "no input file for AES decrypt\n");
+		print_fail("no input file for AES decrypt");
 		exit(-1);
 	}
 
 	size_t encrypted_len;
 	char *encrypted = load_buffer_from_file(argv[1], &encrypted_len);
 	if (encrypted == NULL) {
-		fprintf(stderr, "failed to open input file %s\n", argv[1]);
+		print_fail("failed to open input file %s", argv[1]);
 		exit(-1);
 	}
 
 	size_t raw_encrypted_len;
 	char *raw_encrypted = base64_to_raw(encrypted, encrypted_len, &raw_encrypted_len);
 	if (raw_encrypted == NULL) {
-		fprintf(stderr, "failed to convert input to raw bytes\n");
+		print_fail("failed to convert input to raw bytes");
 		exit(-1);
 	}
 
 	char *plaintext = NULL;
 	size_t plaintext_len;
 	if (aes_128_ecb_decrypt(raw_encrypted, raw_encrypted_len, argv[2], strlen(argv[2]), &plaintext, &plaintext_len) != 0 || plaintext == NULL) {
-		fprintf(stderr, "AES 128 ECB: failed to decrypt\n");
+		print_fail("AES 128 ECB: failed to decrypt");
 		exit(-1);
 	}
 
 	char *reencrypted = NULL;
 	size_t reencrypted_len;
 	if (aes_128_ecb_encrypt(plaintext, plaintext_len, argv[2], strlen(argv[2]), &reencrypted, &reencrypted_len) != 0 || reencrypted == NULL) {
-		fprintf(stderr, "AES 128 ECB: failed to reencrypt\n");
+		print_fail("AES 128 ECB: failed to reencrypt");
 		exit(-1);
 	}
 
 	if (strncmp(reencrypted, raw_encrypted, raw_encrypted_len) != 0) {
-		fprintf(stderr, "AES 128 ECB: input and reencrypted don't match\n");
+		print_fail("AES 128 ECB: input and reencrypted don't match");
 		exit(-1);
 	}
 
@@ -134,22 +134,22 @@ int main(int argc, char **argv)
 		size_t raw_len;
 		char *raw = hex_to_raw(line, line_len, &raw_len);
 		if (raw == NULL) {
-			fprintf(stderr, "failed to convert hex to raw\n");
+			print_fail("failed to convert hex to raw");
 			exit(-1);
 		}
 
 		if (is_aes_128_ecb(raw, raw_len) && index != 132) {
-			fprintf(stderr, "AES 128 ECB: detected wrong line (%d)\n", index);
+			print_fail("AES 128 ECB: detected wrong line (%d)", index);
 		}
 		free(raw);
 	});
 
 	char *key = aes_generate_key();
 	if (key == NULL) {
-		fprintf(stderr, "AES 128: failed to generate AES key\n");
+		print_fail("AES 128: failed to generate AES key");
 	}
 
-	printf("AES 128 CBC OK\n");
+	print_success("AES 128 CBC OK");
 
 	free(key);
 	free(reencrypted);

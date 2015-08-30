@@ -9,15 +9,15 @@ all: tests
 
 tests: base64_test repeating_key_xor_test decrypt_single_char_xor_test xor_buffers_test aes_128_ecb_test pkcs7_padding_test aes_cbc_test aes_ecb_cbc_oracle_test kv_parse_test
 
-base64_test: output_dirs hex_to_base64.c
-	$(CC) -DBASE64_TEST -o $(BIN)/hex_to_base64 hex_to_base64.c
+base64_test: output_dirs utility.o hex_to_base64.c
+	$(CC) -DBASE64_TEST -o $(BIN)/hex_to_base64 $(OBJ)/utility.o hex_to_base64.c
 	$(BIN)/hex_to_base64 
 
 base64.o: output_dirs hex_to_base64.c
 	$(CC) -o $(OBJ)/hex_to_base64.o -c hex_to_base64.c
 
-decrypt_single_char_xor_test: output_dirs base64.o decrypt_single_char_xor.c
-	$(CC) -DDECRYPT_SINGLE_CHAR_XOR_TEST -o $(BIN)/decrypt_single_char_xor $(OBJ)/hex_to_base64.o decrypt_single_char_xor.c
+decrypt_single_char_xor_test: output_dirs base64.o utility.o decrypt_single_char_xor.c
+	$(CC) -DDECRYPT_SINGLE_CHAR_XOR_TEST -o $(BIN)/decrypt_single_char_xor $(OBJ)/hex_to_base64.o $(OBJ)/utility.o decrypt_single_char_xor.c
 	$(BIN)/decrypt_single_char_xor
 	$(BIN)/decrypt_single_char_xor input/input_4.txt
 
@@ -31,8 +31,8 @@ repeating_key_xor_test: output_dirs decrypt_single_char_xor.o base64.o repeating
 xor_buffers.o: output_dirs xor_buffers.c
 	$(CC) -o $(OBJ)/xor_buffers.o -c xor_buffers.c
 
-xor_buffers_test: output_dirs xor_buffers.c
-	$(CC) -DXOR_BUFFER_TEST -o $(BIN)/xor_buffers xor_buffers.c
+xor_buffers_test: output_dirs utility.o xor_buffers.c
+	$(CC) -DXOR_BUFFER_TEST -o $(BIN)/xor_buffers $(OBJ)/utility.o xor_buffers.c
 	$(BIN)/xor_buffers 
 
 aes_128_ecb.o: output_dirs aes_128_ecb.c
@@ -48,8 +48,8 @@ utility.o: output_dirs utility.c
 pkcs7_padding.o: output_dirs pkcs7_padding.c
 	$(CC) -o $(OBJ)/pkcs7_padding.o -c pkcs7_padding.c
 
-pkcs7_padding_test: output_dirs pkcs7_padding.c
-	$(CC) -DPKCS7_PADDING_TEST -o $(BIN)/pkcs7_padding pkcs7_padding.c
+pkcs7_padding_test: output_dirs utility.o pkcs7_padding.c
+	$(CC) -DPKCS7_PADDING_TEST -o $(BIN)/pkcs7_padding $(OBJ)/utility.o pkcs7_padding.c
 	$(BIN)/pkcs7_padding
 
 aes_cbc.o: output_dirs aes_cbc.c
@@ -63,12 +63,17 @@ aes_ecb_cbc_oracle_test: output_dirs aes_ecb_cbc_oracle.c aes_cbc.o aes_128_ecb.
 	$(CC) -DAES_ECB_CBC_ORACLE_TEST -o $(BIN)/aes_ecb_cbc_oracle $(OBJ)/aes_cbc.o $(OBJ)/aes_128_ecb.o $(OBJ)/pkcs7_padding.o $(OBJ)/xor_buffers.o $(OBJ)/utility.o $(OBJ)/hex_to_base64.o aes_ecb_cbc_oracle.c
 	$(BIN)/aes_ecb_cbc_oracle input/input_12.txt
 
-kv_parse_test: output_dirs kv_parse.c aes_128_ecb.o pkcs7_padding.o
-	$(CC) -DKV_PARSE_TEST -o $(BIN)/kv_parse $(OBJ)/aes_128_ecb.o $(OBJ)/pkcs7_padding.o kv_parse.c
+kv_parse_test: output_dirs kv_parse.c aes_128_ecb.o pkcs7_padding.o utility.o
+	$(CC) -DKV_PARSE_TEST -o $(BIN)/kv_parse $(OBJ)/aes_128_ecb.o $(OBJ)/pkcs7_padding.o $(OBJ)/utility.o kv_parse.c
 	$(BIN)/kv_parse
 
 kv_parse.o: output_dirs kv_parse.c
 	$(CC) -o $(OBJ)/kv_parse.o -c kv_parse.c
+
+ecb_cut_and_paste_test: output_dirs ecb_cut_and_paste.c kv_parse.o aes_128_ecb.o pkcs7_padding.o
+	$(CC) -o $(BIN)/ecb_cut_and_paste $(OBJ)/kv_parse.o $(OBJ)/aes_128_ecb.o $(OBJ)/pkcs7_padding.o ecb_cut_and_paste.c
+	$(BIN)/ecb_cut_and_paste
+
 
 clean:
 	rm -rf $(BIN); rm -rf $(OBJ)
