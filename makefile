@@ -2,12 +2,12 @@ CC=xcrun -sdk macosx clang
 BIN=bin
 OBJ=obj
 
+all: tests
+
 output_dirs:
 	mkdir -p $(BIN); mkdir -p $(OBJ)
 
-all: tests
-
-tests: base64_test repeating_key_xor_test decrypt_single_char_xor_test xor_buffers_test aes_128_ecb_test pkcs7_padding_test aes_cbc_test aes_ecb_cbc_oracle_test kv_parse_test
+tests: base64_test repeating_key_xor_test decrypt_single_char_xor_test xor_buffers_test aes_128_ecb_test pkcs7_padding_test aes_cbc_test aes_ecb_cbc_oracle_test kv_parse_test ecb_cut_and_paste_test
 
 base64_test: output_dirs utility.o hex_to_base64.c
 	$(CC) -DBASE64_TEST -o $(BIN)/hex_to_base64 $(OBJ)/utility.o hex_to_base64.c
@@ -70,10 +70,9 @@ kv_parse_test: output_dirs kv_parse.c aes_128_ecb.o pkcs7_padding.o utility.o
 kv_parse.o: output_dirs kv_parse.c
 	$(CC) -o $(OBJ)/kv_parse.o -c kv_parse.c
 
-ecb_cut_and_paste_test: output_dirs ecb_cut_and_paste.c kv_parse.o aes_128_ecb.o pkcs7_padding.o
-	$(CC) -o $(BIN)/ecb_cut_and_paste $(OBJ)/kv_parse.o $(OBJ)/aes_128_ecb.o $(OBJ)/pkcs7_padding.o ecb_cut_and_paste.c
+ecb_cut_and_paste_test: output_dirs ecb_cut_and_paste.c kv_parse.o aes_128_ecb.o pkcs7_padding.o utility.o
+	$(CC) -o $(BIN)/ecb_cut_and_paste $(OBJ)/kv_parse.o $(OBJ)/aes_128_ecb.o $(OBJ)/pkcs7_padding.o $(OBJ)/utility.o ecb_cut_and_paste.c
 	$(BIN)/ecb_cut_and_paste
-
 
 clean:
 	rm -rf $(BIN); rm -rf $(OBJ)

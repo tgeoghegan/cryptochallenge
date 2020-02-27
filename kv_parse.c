@@ -127,14 +127,22 @@ static char *unparse_profile(xpc_object_t profile)
 	}
 	unparsed[0] = '\0';
 
-	xpc_dictionary_apply(profile, ^bool (const char *key, xpc_object_t value) {
-		strlcat(unparsed, key, profile_len);
+	// The attack in challenge 13 relies on the ordering of the keys in the encoded profile: role
+	// can't be first or we can't control the position of its value. So instead of handling
+	// arbitrary keys, we hard code specific keys in a specific order.
+	const char *keys[3] = {"email", "uid", "role"};
+	for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
+		strlcat(unparsed, keys[i], profile_len);
 		strlcat(unparsed, "=", profile_len);
-		strlcat(unparsed, xpc_string_get_string_ptr(value), profile_len);
-		strlcat(unparsed, "&", profile_len);
 
-		return true;
-	});
+		const char *value = xpc_dictionary_get_string(profile, keys[i]);
+		if (value == NULL) {
+			goto out;
+		}
+
+		strlcat(unparsed, value, profile_len);
+		strlcat(unparsed, "&", profile_len);
+	}
 
 	// Replace trailing '&' with NUL
 	unparsed[profile_len] = '\0';
@@ -149,7 +157,7 @@ out:
 	return unparsed;
 }
 
-static int uid = 0;
+static int uid = 1;
 
 char *profile_for(const char *email)
 {
@@ -246,13 +254,8 @@ xpc_object_t parse_encrypted_profile(const char *encrypted_profile, size_t encry
 		goto out;
 	}
 
-	// grow decrypted profile by one byte for '\0'
-	decrypted_profile = realloc(decrypted_profile, decrypted_profile_len + 1);
-	if (decrypted_profile == NULL) {
-		goto out;
-	}
-
-	decrypted_profile[decrypted_profile_len] = '\0';
+	// Strip padding from plaintext by truncating string with NUL
+	decrypted_profile[pkcs7_unpad_buffer(decrypted_profile, decrypted_profile_len)] = '\0';
 
 	parsed = parse_profile(decrypted_profile);
 	if (parsed == NULL) {
@@ -332,8 +335,8 @@ int main()
 
 	xpc_release(dict);
 
-	char *profile = "foo=bar&qux=blat";
-	char *profile_backwards = "qux=blat&foo=bar";
+	char *profile = "email=bar&uid=111&role=blat";
+	char *profile_backwards = "role=blat&uid=111&email=bar";
 	dict = parse_profile(profile);
 	if (dict == NULL) {
 		print_fail("KV parse: failed to parse valid profile");
@@ -346,10 +349,12 @@ int main()
 		exit(-1);
 	}
 
-	if (xpc_dictionary_get_string(dict, "foo") == NULL || strcmp(xpc_dictionary_get_string(dict, "foo"), "bar") != 0
-		|| xpc_dictionary_get_string(dict, "qux") == NULL || strcmp(xpc_dictionary_get_string(dict, "qux"), "blat") != 0
-		|| xpc_dictionary_get_string(dict_backwards, "foo") == NULL || strcmp(xpc_dictionary_get_string(dict_backwards, "foo"), "bar") != 0
-		|| xpc_dictionary_get_string(dict_backwards, "qux") == NULL || strcmp(xpc_dictionary_get_string(dict_backwards, "qux"), "blat") != 0) {
+	if (xpc_dictionary_get_string(dict, "email") == NULL || strcmp(xpc_dictionary_get_string(dict, "email"), "bar") != 0
+		|| xpc_dictionary_get_string(dict, "role") == NULL || strcmp(xpc_dictionary_get_string(dict, "role"), "blat") != 0
+		|| xpc_dictionary_get_string(dict, "uid") == NULL || strcmp(xpc_dictionary_get_string(dict, "uid"), "111") != 0
+		|| xpc_dictionary_get_string(dict_backwards, "email") == NULL || strcmp(xpc_dictionary_get_string(dict_backwards, "email"), "bar") != 0
+		|| xpc_dictionary_get_string(dict_backwards, "role") == NULL || strcmp(xpc_dictionary_get_string(dict_backwards, "role"), "blat") != 0
+		|| xpc_dictionary_get_string(dict_backwards, "uid") == NULL || strcmp(xpc_dictionary_get_string(dict_backwards, "uid"), "111") != 0) {
 		char *desc = xpc_copy_description(dict);
 		char *desc_backwards = xpc_copy_description(dict_backwards);
 		print_fail("KV parse: incorrect parse of valid profiles (%s\n%s)", desc, desc_backwards);
@@ -371,13 +376,13 @@ int main()
 		exit(-1);
 	}
 
-	value = xpc_dictionary_get_string(dict, "foo");
+	value = xpc_dictionary_get_string(dict, "email");
 	if (!value || strcmp(value, "bar") != 0) {
-		print_fail("KV parse: fwrong value in dict");
+		print_fail("KV parse: frong value in dict");
 		exit(-1);
 	}
 
-	value = xpc_dictionary_get_string(dict, "qux");
+	value = xpc_dictionary_get_string(dict, "role");
 	if (!value || strcmp(value, "blat") != 0) {
 		print_fail("KV parse: fwrong value in dict");
 		exit(-1);

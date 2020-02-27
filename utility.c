@@ -78,7 +78,7 @@ size_t memcmp_where(const char *lhs, const char *rhs, size_t size)
 	return -1;
 }
 
-void dump_hex_fd(FILE *filedes, char *string, size_t len)
+void dump_hex_fd(FILE *filedes, const char *string, size_t len)
 {
 	fprintf(filedes, "0x");
 	for (size_t i = 0; i < len; i++) {
@@ -91,12 +91,12 @@ void dump_hex_fd(FILE *filedes, char *string, size_t len)
 	fprintf(filedes, "\n");
 }
 
-void dump_hex(char *string, size_t len)
+void dump_hex(const char *string, size_t len)
 {
 	dump_hex_fd(stdout, string, len);
 }
 
-void dump_hex_label(FILE *filedes, char *label, char *string, size_t len)
+void dump_hex_label(FILE *filedes, const char *label, const char *string, size_t len)
 {
 	fprintf(filedes, "%s:\t", label);
 	dump_hex_fd(filedes, string, len);
