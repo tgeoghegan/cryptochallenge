@@ -185,9 +185,20 @@ out:
 	return success;
 }
 
+/*
+ * Random prefix string for use in the challenge 14 ECB oracle. Declared static as we will lazily
+ * initialize it and use a fixed random string for each individual exercise.
+ */
 static char *random_prefix = NULL;
 static size_t random_prefix_len = 0;
 
+/*
+ * ECB oracle for challenge 14. Here we construct a plaintext like this:
+ * random-prefix || plaintext || unknown_string
+ * random prefix is a string of random  printable characters whose length is random (though capped
+ * at 110 characters to facilitate debugging in hex dumps). plaintext is the "attacker" controlled
+ * plaintext, and unknown_string is the fixed target of the byte-at-a-time ECB decryption attack.
+ */
 bool aes_encryption_oracle_fixed_key_unknown_string_random_prefix(const char *unknown_string, size_t unknown_string_len,
 	const char *plaintext, size_t plaintext_len, char **out_ciphertext, size_t *out_ciphertext_len)
 {
@@ -195,13 +206,14 @@ bool aes_encryption_oracle_fixed_key_unknown_string_random_prefix(const char *un
 	char *doctored_plaintext = NULL;
 
 	if (random_prefix == NULL) {
-		random_prefix_len = arc4random_uniform(100);
+		random_prefix_len = arc4random_uniform(100) + 10;
 		random_prefix = calloc(1, random_prefix_len + 1);
 		if (random_prefix == NULL) {
 			goto done;
 		}
 
 		generate_random_string(random_prefix, random_prefix_len);
+		printf("cheat: random prefix is %zu long\n", random_prefix_len);
 	}
 
 	size_t doctored_plaintext_len = plaintext_len + random_prefix_len;
@@ -335,7 +347,7 @@ bool aes_ecb_byte_at_a_time_decrypt(const char *unknown_string, size_t unknown_s
 		size_t guess_plaintext_len = curr_plaintext_len + i + 1;
 		if (guess_plaintext_len > sizeof(guess_plaintext)) {
 			print_fail("guess plaintext buffer not large enough");
-			goto out;		
+			goto out;
 		}
 
 		memcpy(guess_plaintext, plaintext, curr_plaintext_len);
@@ -388,6 +400,130 @@ out:
 	return success;
 }
 
+bool aes_ecb_byte_at_a_time_decrypt_random_prefix(const char *unknown_string, size_t unknown_string_len)
+{
+	/*
+	 * The random prefix oracle will take our provided plaintext and prepend a random prefix, then
+	 * append the target string. We denote the random characters of the prefix with '#', the
+	 * message we control as 'a' and the
+	 * unknown/target string as "YELLOW SUBMARINE". Let's start by feeding in a message three blocks
+	 * long. We get a plaintext like:
+	 *
+	 * ################ <-|
+	 * ...                |- n blocks containing any portion of the random prefix
+	 * ################   |
+	 * #####aaaaaaaaaaa <-|
+	 * aaaaaaaaaaaaaaaa <-   a block containing exclusively attacker string
+	 * aaaaaaaaaaaaaaaa <-   identical to the previous block
+	 * aaaaaYELLOW SUBM <-   first block containing target string
+	 * ARINE            <-   PKCS7 padding omitted here
+	 *
+	 * For a fixed key and random prefix, and if we don't shrink the attacker string, the ciphertext
+	 * of the first n blocks will never change. Further, because of ECB mode, the ciphertext blocks
+	 * containing exclusively the attacker string will all be identical to each other. So we can
+	 * seek two identical, consecutive blocks of ciphertext and assume that the block after that is
+	 * where the target string begins.
+	 */
+	bool success = false;
+	const size_t blocksize = 16;
+	char *ciphertext = NULL;
+	size_t ciphertext_len;
+
+	char attacker_string[blocksize * 3];
+	memset(attacker_string, 'a', sizeof(attacker_string));
+
+	if (!aes_encryption_oracle_fixed_key_unknown_string_random_prefix(unknown_string, unknown_string_len,
+		attacker_string, sizeof(attacker_string), &ciphertext, &ciphertext_len)) {
+		print_fail("AES ECB byte at a time (harder): failed to encrypt plaintext");
+		goto done;
+	}
+
+	printf("ciphertext len %zu blocks: %zu ", ciphertext_len, ciphertext_len / blocksize);
+	dump_hex(ciphertext, ciphertext_len);
+
+	// Compare each ciphertext block to its successor, looking for the two blocks made up of
+	// attacker string
+	size_t match_index = 0;
+	char controlled_ciphertext_block[blocksize];
+	for (size_t i = 0; i < ciphertext_len / blocksize; i++) {
+		if (memcmp(ciphertext + (i * blocksize), ciphertext + ((i+1) * blocksize), blocksize) == 0) {
+			printf("matching ciphertext blocks at %zu\n", i);
+			match_index = i;
+			// Record contents of controlled ciphertext
+			memcpy(controlled_ciphertext_block, ciphertext + (i * blocksize), blocksize);
+			break;
+		}
+	}
+	if (match_index == 0) {
+		print_fail("AES ECB byte at a time (harder): failed to find identical blocks in ciphertext");
+		goto done;
+	}
+
+	/*
+	 * Now we suspect that the block at match_index is the first block containing no random prefix.
+	 * We can confirm that guess by growing our plaintext by one block: if we're right, we'll see
+	 * one more ciphertext block whose contents match the two we saw before, immediately after those
+	 * blocks. Like so:
+	 *
+	 * ################ <-|
+	 * ...                |- n blocks containing any portion of the random prefix
+	 * ################   |
+	 * #####aaaaaaaaaaa <-|
+	 * aaaaaaaaaaaaaaaa <-   a block containing exclusively attacker string
+	 * aaaaaaaaaaaaaaaa <-   identical to the previous block
+	 * aaaaaaaaaaaaaaaa <-   extra block relative to previous encryption
+	 * aaaaaYELLOW SUBM <-   first block containing target string
+	 * ARINE
+	 */
+	char attacker_string_four_blocks[blocksize * 4];
+	memset(attacker_string_four_blocks, 'a', sizeof(attacker_string_four_blocks));
+
+	free(ciphertext);
+	ciphertext = NULL;
+	if (!aes_encryption_oracle_fixed_key_unknown_string_random_prefix(unknown_string, unknown_string_len,
+		attacker_string_four_blocks, sizeof(attacker_string_four_blocks), &ciphertext, &ciphertext_len)) {
+		print_fail("AES ECB byte at a time (harder): failed to encrypt plaintext");
+		goto done;
+	}
+
+	// We know how many blocks the random prefix occupies so we can directly check the three blocks
+	// we are interested in, all of which ought to match the recorded block from before.
+	if (memcmp(controlled_ciphertext_block, ciphertext + (match_index * blocksize), sizeof(controlled_ciphertext_block)) != 0
+		|| memcmp(controlled_ciphertext_block, ciphertext + ((match_index + 1) * blocksize), sizeof(controlled_ciphertext_block)) != 0
+		|| memcmp(controlled_ciphertext_block, ciphertext + ((match_index + 2) * blocksize), sizeof(controlled_ciphertext_block)) != 0) {
+		print_fail("AES ECB byte at a time (harder): unexpected result from growing plaintext");
+	}
+
+	/*
+	 * Now we are confident of which block the unknown string will start in, for arbitary attacker
+	 * controlled strings. Next, we want to figure out the exact length of the unknown string. Let's
+	 * take the ciphertext from before and only consider the blocks containing the target string:
+	 *
+	 * aaaaaYELLOW SUBM <- prefixed with blocksize - p bytes of attacker controlled string
+	 * ARINE            <- p bytes of PKCS7 padding omitted here
+	 *
+	 * Let us denote the index of the first block containing the target string as k. So, the length
+	 * of the target string is:
+	 *      ciphertext_len - (k * blocksize) - p - (blocksize - p)
+	 *
+	 *
+	 * We know everything here except p. Note that the portion of block k made up of the target
+	 * string has the same length as the padding that will be applied to the last block. So, we can
+	 * grow our controlled input by a byte at a time until we see a new ciphertext block matching
+	 * our known block from before, indicating that we've pushed the unknown string to the start of
+	 * the next block, and have figured out the padding length.
+	 */
+	free(ciphertext);
+	ciphertext = NULL;
+
+
+	success = true;
+done:
+	free(ciphertext);
+
+	return success;
+}
+
 #if AES_ECB_CBC_ORACLE_TEST
 
 int main(int argc, char **argv)
@@ -429,12 +565,12 @@ int main(int argc, char **argv)
 
 	print_success("AES ECB byte at a time decrypt OK");
 
-	char *ciphertext = NULL;
-	size_t ciphertext_len = 0;
-	if (!aes_encryption_oracle_fixed_key_unknown_string_random_prefix(raw_unknown_string, raw_unknown_string_len, "hello", 5, &ciphertext, &ciphertext_len)) {
-		print_fail("AES ECB byte at a time decrypt (harder): failed to encrypt");
+	if (!aes_ecb_byte_at_a_time_decrypt_random_prefix(raw_unknown_string, raw_unknown_string_len)) {
+		print_fail("AES ECB byte at a time decrypt (harder): failed");
 		exit(-1);
 	}
+
+	print_success("AES ECB byte at a time decrypt (harder) OK");
 
 	return 0;
 }
