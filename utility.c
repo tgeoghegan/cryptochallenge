@@ -131,3 +131,13 @@ void print_fail(const char *format, ...)
 	print_color(false, format, ap);
 	va_end(ap);
 }
+
+void generate_random_string(char *buf, size_t len)
+{
+	const char *printables = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()";
+
+	for (size_t i = 0; i < len; i++) {
+		uint32_t printable = arc4random_uniform(strlen(printables));
+		buf[i] = printables[printable];
+	}
+}

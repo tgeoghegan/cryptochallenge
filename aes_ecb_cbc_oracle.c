@@ -185,6 +185,45 @@ out:
 	return success;
 }
 
+static char *random_prefix = NULL;
+static size_t random_prefix_len = 0;
+
+bool aes_encryption_oracle_fixed_key_unknown_string_random_prefix(const char *unknown_string, size_t unknown_string_len,
+	const char *plaintext, size_t plaintext_len, char **out_ciphertext, size_t *out_ciphertext_len)
+{
+	bool success = false;
+	char *doctored_plaintext = NULL;
+
+	if (random_prefix == NULL) {
+		random_prefix_len = arc4random_uniform(100);
+		random_prefix = calloc(1, random_prefix_len + 1);
+		if (random_prefix == NULL) {
+			goto done;
+		}
+
+		generate_random_string(random_prefix, random_prefix_len);
+	}
+
+	size_t doctored_plaintext_len = plaintext_len + random_prefix_len;
+
+	doctored_plaintext = calloc(1, doctored_plaintext_len);
+	if (doctored_plaintext == NULL) {
+		print_fail("failed to allocate doctored plaintext");
+		goto done;
+	}
+
+	memcpy(doctored_plaintext, random_prefix, random_prefix_len);
+	memcpy(doctored_plaintext + random_prefix_len, plaintext, plaintext_len);
+
+	success = aes_encryption_oracle_fixed_key_unknown_string(unknown_string, unknown_string_len,
+		doctored_plaintext, doctored_plaintext_len, out_ciphertext, out_ciphertext_len);
+
+done:
+	free(doctored_plaintext);
+
+	return success;
+}
+
 bool aes_encryption_oracle_is_cbc(aes_encryption_oracle_t oracle, bool *correct)
 {
 	bool is_cbc = true;
@@ -389,6 +428,13 @@ int main(int argc, char **argv)
 	}
 
 	print_success("AES ECB byte at a time decrypt OK");
+
+	char *ciphertext = NULL;
+	size_t ciphertext_len = 0;
+	if (!aes_encryption_oracle_fixed_key_unknown_string_random_prefix(raw_unknown_string, raw_unknown_string_len, "hello", 5, &ciphertext, &ciphertext_len)) {
+		print_fail("AES ECB byte at a time decrypt (harder): failed to encrypt");
+		exit(-1);
+	}
 
 	return 0;
 }

@@ -5,3 +5,4 @@ void dump_hex(const char *string, size_t len);
 void dump_hex_label(FILE *filedes, const char *label, const char *string, size_t len);
 void print_success(const char *format, ...);
 void print_fail(const char *format, ...);
+void generate_random_string(char *buf, size_t len);
