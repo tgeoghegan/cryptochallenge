@@ -66,7 +66,7 @@ bool aes_encryption_oracle_random(char *plaintext, size_t plaintext_len, char **
 		}
 	} else {
 		size_t padded_len;
-		char *ecb_padded_plaintext = pkcs7_pad_buffer(false, doctored_plaintext, doctored_plaintext_len, 16, &padded_len);
+		ecb_padded_plaintext = pkcs7_pad_buffer(false, doctored_plaintext, doctored_plaintext_len, 16, &padded_len);
 		if (ecb_padded_plaintext == NULL) {
 			goto out;
 		}
@@ -304,6 +304,8 @@ bool aes_ecb_byte_at_a_time_decrypt(const char *unknown_string, size_t unknown_s
 			print_fail("AES ECB byte at a time: failed to encrypt string");
 			goto out;
 		}
+		free(ciphertext);
+		ciphertext = NULL;
 
 		if (plaintext_len_guess == 0) {
 			bare_unknown_string_ciphertext_len = ciphertext_len;
@@ -545,8 +547,13 @@ bool aes_ecb_byte_at_a_time_decrypt_random_prefix(const char *unknown_string, si
 
 		// We are looking for three consecutive, identical blocks of ciphertext, just like before.
 		if (!check_for_three_recorded_block(ciphertext, match_index, controlled_ciphertext_block, blocksize)) {
+			free(ciphertext);
+			ciphertext = NULL;
 			continue;
 		}
+
+		free(ciphertext);
+		ciphertext = NULL;
 
 		size_t ciphertext_len_with_p_prime = ciphertext_len;
 		bool found_p_prime = false;
@@ -559,6 +566,8 @@ bool aes_ecb_byte_at_a_time_decrypt_random_prefix(const char *unknown_string, si
 				print_fail("AES ECB byte at a time (harder): failed to encrypt plaintext");
 				goto done;
 			}
+			free(ciphertext);
+			ciphertext = NULL;
 			if (ciphertext_len > ciphertext_len_with_p_prime) {
 				if (ciphertext_len_with_p_prime + 16 != ciphertext_len) {
 					print_fail("unexpected ciphertext size growth: %zu %zu\n", ciphertext_len, ciphertext_len_with_p_prime);
@@ -644,6 +653,9 @@ int main(int argc, char **argv)
 	}
 
 	print_success("AES ECB byte at a time decrypt (harder) OK");
+
+	free(base64_unknown_string);
+	free(raw_unknown_string);
 
 	return 0;
 }
