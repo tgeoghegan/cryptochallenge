@@ -100,7 +100,7 @@ static char *fixed_key = NULL;
 
 bool aes_ecb_encryption_oracle(char *plaintext, size_t plaintext_len, char **out_ciphertext, size_t *out_ciphertext_len, bool *used_cbc)
 {
-	bool success;
+	bool success = false;
 	char *padded_plaintext = NULL;
 	size_t padded_len;
 	char *ciphertext = NULL;
@@ -143,7 +143,8 @@ out:
 	return success;
 }
 
-bool aes_encryption_oracle_fixed_key_unknown_string(const char *unknown_string, size_t unknown_string_len, const char *plaintext, size_t plaintext_len, char **out_ciphertext, size_t *out_ciphertext_len)
+bool aes_encryption_oracle_fixed_key_unknown_string(const char *unknown_string, size_t unknown_string_len,
+	const char *plaintext, size_t plaintext_len, char **out_ciphertext, size_t *out_ciphertext_len)
 {
 	bool success = false;
 
@@ -242,7 +243,7 @@ bool aes_ecb_byte_at_a_time_decrypt(const char *unknown_string, size_t unknown_s
 	// amount of padding needed for the unknown string and so we know how many
 	// bytes short of a block the unknown string is. That then allows us to
 	// compute the unknown string's length from the length of the ciphertext
-	// that the unknown string along yields.
+	// that the unknown string alone yields.
 	// Of course this is just unknown_string_len but the exercise is worthwhile.
 	size_t bare_unknown_string_ciphertext_len;
 	size_t plaintext_len_guess;
