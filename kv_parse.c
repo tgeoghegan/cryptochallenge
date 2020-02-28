@@ -421,10 +421,10 @@ int main()
 	}
 
 	if (xpc_dictionary_get_string(dict, "email") == NULL || strcmp(xpc_dictionary_get_string(dict, "email"), "joe@blow.com") != 0
-		|| xpc_dictionary_get_string(dict, "uid") == NULL || strcmp(xpc_dictionary_get_string(dict, "uid"), "0") != 0
+		|| xpc_dictionary_get_string(dict, "uid") == NULL || strcmp(xpc_dictionary_get_string(dict, "uid"), "1") != 0
 		|| xpc_dictionary_get_string(dict, "role") == NULL || strcmp(xpc_dictionary_get_string(dict, "role"), "user") != 0
 		|| xpc_dictionary_get_count(dict) != 3) {
-		print_fail("KV parse: unexpected values in user profile %s", user_profile);
+		print_fail("KV parse: unexpected values in user profile 0 %s", user_profile);
 		exit(-1);
 	}
 
@@ -445,10 +445,10 @@ int main()
 	}
 
 	if (xpc_dictionary_get_string(dict, "email") == NULL || strcmp(xpc_dictionary_get_string(dict, "email"), "jane@blow.com") != 0
-		|| xpc_dictionary_get_string(dict, "uid") == NULL || strcmp(xpc_dictionary_get_string(dict, "uid"), "1") != 0
+		|| xpc_dictionary_get_string(dict, "uid") == NULL || strcmp(xpc_dictionary_get_string(dict, "uid"), "2") != 0
 		|| xpc_dictionary_get_string(dict, "role") == NULL || strcmp(xpc_dictionary_get_string(dict, "role"), "user") != 0
 		|| xpc_dictionary_get_count(dict) != 3) {
-		print_fail("KV parse: unexpected values in user profile %s", user_profile);
+		print_fail("KV parse: unexpected values in user profile 1 %s", user_profile);
 		exit(-1);
 	}
 
@@ -494,11 +494,11 @@ int main()
 	}
 
 	if (xpc_dictionary_get_string(dict, "email") == NULL || strcmp(xpc_dictionary_get_string(dict, "email"), "joe@blow.com") != 0
-		|| xpc_dictionary_get_string(dict, "uid") == NULL || strcmp(xpc_dictionary_get_string(dict, "uid"), "2") != 0
+		|| xpc_dictionary_get_string(dict, "uid") == NULL || strcmp(xpc_dictionary_get_string(dict, "uid"), "3") != 0
 		|| xpc_dictionary_get_string(dict, "role") == NULL || strcmp(xpc_dictionary_get_string(dict, "role"), "user") != 0
 		|| xpc_dictionary_get_count(dict) != 3) {
 		char *desc = xpc_copy_description(dict);
-		print_fail("KV parse: unexpected values in user profile %s", desc);
+		print_fail("KV parse: unexpected values in user profile 2 %s", desc);
 		free(desc);
 		exit(-1);
 	}

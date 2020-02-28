@@ -583,6 +583,7 @@ bool aes_ecb_byte_at_a_time_decrypt_random_prefix(const char *unknown_string, si
 		goto done;
 	}
 
+	// Rather lazily duplicates code, but frankly factoring it out would be a chore
 	// Guess each letter of plaintext
 	for (size_t i = 0; i < unknown_string_len_guess; i++) {
 		char *curr_ciphertext = NULL;
