@@ -207,13 +207,12 @@ bool aes_encryption_oracle_fixed_key_unknown_string_random_prefix(const char *un
 
 	if (random_prefix == NULL) {
 		random_prefix_len = arc4random_uniform(100) + 10;
-		random_prefix = calloc(1, random_prefix_len + 1);
+		random_prefix = calloc(1, random_prefix_len);
 		if (random_prefix == NULL) {
 			goto done;
 		}
 
 		generate_random_string(random_prefix, random_prefix_len);
-		printf("cheat: random prefix is %zu long\n", random_prefix_len);
 	}
 
 	size_t doctored_plaintext_len = plaintext_len + random_prefix_len;
@@ -336,7 +335,8 @@ bool aes_ecb_byte_at_a_time_decrypt(const char *unknown_string, size_t unknown_s
 
 		// Encrypt an input that will put the target character of the unknown
 		// string at the end of a block in the ciphertext
-		if (!aes_encryption_oracle_fixed_key_unknown_string(unknown_string, unknown_string_len, plaintext, curr_plaintext_len, &curr_ciphertext, &curr_ciphertext_len)) {
+		if (!aes_encryption_oracle_fixed_key_unknown_string(unknown_string, unknown_string_len,
+			plaintext, curr_plaintext_len, &curr_ciphertext, &curr_ciphertext_len)) {
 			print_fail("failed to encrypt ciphertext %zd", i);
 			goto out;
 		}
@@ -365,12 +365,14 @@ bool aes_ecb_byte_at_a_time_decrypt(const char *unknown_string, size_t unknown_s
 
 			char *guess_ciphertext = NULL;
 			size_t guess_ciphertext_len;
-			if (!aes_encryption_oracle_fixed_key_unknown_string(unknown_string, unknown_string_len, guess_plaintext, guess_plaintext_len, &guess_ciphertext, &guess_ciphertext_len)) {
+			if (!aes_encryption_oracle_fixed_key_unknown_string(unknown_string, unknown_string_len,
+				guess_plaintext, guess_plaintext_len, &guess_ciphertext, &guess_ciphertext_len)) {
 				print_fail("failed to encrypt guess ciphertext %d", c);
 				goto out;
 			}
 
-			bool match = memcmp(curr_ciphertext + i / blocksize * blocksize, guess_ciphertext + i / blocksize * blocksize, blocksize) == 0;
+			bool match = memcmp(curr_ciphertext + i / blocksize * blocksize,
+				guess_ciphertext + i / blocksize * blocksize, blocksize) == 0;
 
 			free(guess_ciphertext);
 			guess_ciphertext = NULL;
@@ -402,21 +404,13 @@ out:
 	return success;
 }
 
-static bool check_for_three_recorded_block(char *ciphertext, size_t match_index, char *controlled_ciphertext_block, size_t blocksize)
-{
-	return memcmp(controlled_ciphertext_block, ciphertext + (match_index * blocksize), blocksize) == 0
-		&& memcmp(controlled_ciphertext_block, ciphertext + ((match_index + 1) * blocksize), blocksize) == 0
-		&& memcmp(controlled_ciphertext_block, ciphertext + ((match_index + 2) * blocksize), blocksize) == 0;
-}
-
 bool aes_ecb_byte_at_a_time_decrypt_random_prefix(const char *unknown_string, size_t unknown_string_len)
 {
 	/*
 	 * The random prefix oracle will take our provided plaintext and prepend a random prefix, then
 	 * append the target string. We denote the random characters of the prefix with '#', the
-	 * message we control as 'a' and the
-	 * unknown/target string as "YELLOW SUBMARINE". Let's start by feeding in a message three blocks
-	 * long. We get a plaintext like:
+	 * message we control as 'a' and the unknown/target string as "YELLOW SUBMARINE". Let's start by
+	 * feeding in a message three blocks long. We get a plaintext like:
 	 *
 	 * ################ <-|
 	 * ...                |- n blocks containing any portion of the random prefix
@@ -425,50 +419,19 @@ bool aes_ecb_byte_at_a_time_decrypt_random_prefix(const char *unknown_string, si
 	 * aaaaaaaaaaaaaaaa <-   a block containing exclusively attacker string
 	 * aaaaaaaaaaaaaaaa <-   identical to the previous block
 	 * aaaaaYELLOW SUBM <-   first block containing target string
+	 * ...				<- 	 more blocks containing exclusively the unknown string
 	 * ARINE            <-   PKCS7 padding omitted here
 	 *
 	 * For a fixed key and random prefix, and if we don't shrink the attacker string, the ciphertext
 	 * of the first n blocks will never change. Further, because of ECB mode, the ciphertext blocks
 	 * containing exclusively the attacker string will all be identical to each other. So we can
 	 * seek two identical, consecutive blocks of ciphertext and assume that the block after that is
-	 * where the target string begins.
-	 */
-	bool success = false;
-	const size_t blocksize = 16;
-	char *ciphertext = NULL;
-	size_t ciphertext_len;
-
-	char attacker_string[blocksize * 3];
-	memset(attacker_string, 'a', sizeof(attacker_string));
-
-	if (!aes_encryption_oracle_fixed_key_unknown_string_random_prefix(unknown_string, unknown_string_len,
-		attacker_string, sizeof(attacker_string), &ciphertext, &ciphertext_len)) {
-		print_fail("AES ECB byte at a time (harder): failed to encrypt plaintext");
-		goto done;
-	}
-
-	// Compare each ciphertext block to its successor, looking for the two blocks made up of
-	// attacker string
-	size_t match_index = 0;
-	char controlled_ciphertext_block[blocksize];
-	for (size_t i = 0; i < ciphertext_len / blocksize; i++) {
-		if (memcmp(ciphertext + (i * blocksize), ciphertext + ((i+1) * blocksize), blocksize) == 0) {
-			match_index = i;
-			// Record contents of controlled ciphertext
-			memcpy(controlled_ciphertext_block, ciphertext + (i * blocksize), blocksize);
-			break;
-		}
-	}
-	if (match_index == 0) {
-		print_fail("AES ECB byte at a time (harder): failed to find identical blocks in ciphertext");
-		goto done;
-	}
-
-	/*
-	 * Now we suspect that the block at match_index is the first block containing no random prefix.
-	 * We can confirm that guess by growing our plaintext by one block: if we're right, we'll see
-	 * one more ciphertext block whose contents match the two we saw before, immediately after those
-	 * blocks. Like so:
+	 * where the target string begins. That gives us an upper bound on the length of the unknown
+	 * string, but we don't know how many bytes of its first block are occupied by the last bytes of
+	 * the attacker string and how many padding bytes are in the last block. We can eliminate the
+	 * first unknown by growing the attacker string until the unknown string is pushed into block
+	 * alignment, which we can determine by checking for the appearance of a new block of ciphertext
+	 * that is identical to the two before it. We aim to construct a plaintext like this:
 	 *
 	 * ################ <-|
 	 * ...                |- n blocks containing any portion of the random prefix
@@ -476,118 +439,124 @@ bool aes_ecb_byte_at_a_time_decrypt_random_prefix(const char *unknown_string, si
 	 * #####aaaaaaaaaaa <-|
 	 * aaaaaaaaaaaaaaaa <-   a block containing exclusively attacker string
 	 * aaaaaaaaaaaaaaaa <-   identical to the previous block
-	 * aaaaaaaaaaaaaaaa <-   extra block relative to previous encryption
-	 * aaaaaYELLOW SUBM <-   first block containing target string
-	 * ARINE
+	 * aaaaaaaaaaaaaaaa <-   identical to the previous block
+	 * YELLOW SUBMARINE <-   first block containing target string
+	 * ...				<- 	 more blocks containing exclusively the unknown string
+	 * ARINE            <-   p bytes of PKCS7 padding omitted here
+	 *
+	 * Let's denote this crafted message as m. Now, we know the length of the unknown string is
+	 *	ciphertext length - n * blocksize - 3 * blocksize - p
+	 *
+	 * To work out p, we further grow the plaintext until we see the ciphertext grow by 16 bytes
+	 * (the blocksize), indicating that we have pushed the last byte of the unknown string into a
+	 * new block with 15 bytes of padding like so:
+	 *
+	 * ################ <-|
+	 * ...                |- n blocks containing any portion of the random prefix
+	 * ################   |
+	 * #####aaaaaaaaaaa <-|
+	 * aaaaaaaaaaaaaaaa <-   a block containing exclusively attacker string
+	 * aaaaaaaaaaaaaaaa <-   identical to the previous block
+	 * aaaaaaaaaaaaaaaa <-   identical to the previous block
+	 * aaaaaaaaaaaYELLO <-   last byte of attacker controlled string plus 15 bytes of unknown string
+	 * ...				<- 	 more blocks containing exclusively the unknown string
+	 * E 				<-   15 bytes of PKCS7 padding omitted here
+	 *
+	 * The amount by which we grew the attacker string (minus one for the character pushed into the
+	 * new block) is the p value from the earlier message m. There are no unknowns left and so we
+	 * can get the length fo the unknown string.
 	 */
-	char attacker_string_four_blocks[blocksize * 4];
-	memset(attacker_string_four_blocks, 'a', sizeof(attacker_string_four_blocks));
+	bool success = false;
+	const size_t blocksize = 16;
+	char *ciphertext = NULL;
+	size_t ciphertext_len;
 
-	free(ciphertext);
-	ciphertext = NULL;
-	if (!aes_encryption_oracle_fixed_key_unknown_string_random_prefix(unknown_string, unknown_string_len,
-		attacker_string_four_blocks, sizeof(attacker_string_four_blocks), &ciphertext, &ciphertext_len)) {
-		print_fail("AES ECB byte at a time (harder): failed to encrypt plaintext");
-		goto done;
-	}
-
-	// We know how many blocks the random prefix occupies so we can directly check the three blocks
-	// we are interested in, all of which ought to match the recorded block from before.
-	if (!check_for_three_recorded_block(ciphertext, match_index, controlled_ciphertext_block, blocksize)) {
-		print_fail("AES ECB byte at a time (harder): unexpected result from growing plaintext");
-	}
-
-	/*
-	 * Now we are confident of which block the unknown string will start in, for arbitary attacker
-	 * controlled strings. Next, we want to figure out the exact length of the unknown string. Let's
-	 * take the ciphertext from before and only consider the blocks containing the target string:
-	 *
-	 * aaaaaYELLOW SUBM <- prefixed with q bytes of attacker controlled string
-	 * ...				<- some number of blocks containing exclusively the target string
-	 * ARINE            <- p bytes of PKCS7 padding omitted here
-	 *
-	 * If the first block containing any of the target string is index k, then we know that there
-	 * are at most ciphertext_len - (k * blocksize) bytes of target string. But the first block
-	 * contains an unknown amount of the controlled string and the last block contains an unknown
-	 * amount of padding. First, we can massage the plaintext some more to align the start of the
-	 * unknown string with a block. We achieve this by growing the controlled string until we see a
-	 * new block matching our recorded ciphertext block:
-	 *
-	 * <truncated random prefix and several blocks of controlled text>
-	 * aaaaaaaaaaaaaaaa <- last block entirely composed of controlled plaintext
-	 * YELLOW SUBMARINE <- first block of unknown string
-	 * ...				<- some number of blocks containing exclusively the target string
-	 * YELLOW 			<- p' bytes of PKCS7 padding omitted here
-	 *
-	 * Now we need to work out p'. We can achieve this by further growing the plaintext we control
-	 * until we see a whole new block of ciphertext, which will be the last byte of the unknown
-	 * string plus 15 (blocksize - 1) bytes of padding:
-	 *
-	 * <truncated random prefix and several blocks of controlled text>
-	 * aaaaaaaaaaaaaaaa <- last block entirely composed of controlled plaintext
-	 * aaaaaaaaaaYELLOW <- p' characters of our plaintext plus 16 - p' bytes of unknown string
-	 * ...				<- some number of blocks containing exclusively the target string
-	 *  SUBMARINE YELLO
-	 * W 			    <- 15 bytes of PKCS7 padding omitted here
-	 *
-	 * So p' is now known, and we can compute the unknown string length from the total ciphertext
-	 * length from before.
-	 */
-	free(ciphertext);
-	ciphertext = NULL;
+	// We need at least three blocks to guarantee that we can get two consecutive, repeating blocks
+	// of attacker controlled ciphertext, and we allocate an extra block so we can grow the input to
+	// block align the unknown string and find p.
+	char attacker_string[blocksize * 4];
+	memset(attacker_string, 'a', sizeof(attacker_string));
 
 	size_t unknown_string_len_guess = 0;
 	for (size_t i = 0; i < blocksize; i++) {
-		size_t curr_plaintext_len = sizeof(attacker_string_four_blocks) - blocksize + i;
+		size_t curr_plaintext_len = sizeof(attacker_string) - blocksize + i;
 		if (!aes_encryption_oracle_fixed_key_unknown_string_random_prefix(unknown_string, unknown_string_len,
-			attacker_string_four_blocks, curr_plaintext_len, &ciphertext, &ciphertext_len)) {
+			attacker_string, curr_plaintext_len, &ciphertext, &ciphertext_len)) {
 			print_fail("AES ECB byte at a time (harder): failed to encrypt plaintext");
 			goto done;
 		}
 
-		// We are looking for three consecutive, identical blocks of ciphertext, just like before.
-		if (!check_for_three_recorded_block(ciphertext, match_index, controlled_ciphertext_block, blocksize)) {
-			free(ciphertext);
-			ciphertext = NULL;
-			continue;
+		if (ciphertext_len % blocksize != 0) {
+			print_fail("AES ECB byte at a time (harder): ciphertext not block aligned?");
+			goto done;
+		}
+
+		// There should *always* be two consecutive, identical blocks of plaintext because our
+		// controlled string is at least three blocks long. Three consecutive blocks indicates that
+		// we have block aligned the unknown string. Note that two identical blocks isn't
+		// necessarily our attacker controlled string--there could be repeating blocks in the random
+		// prefix.
+		size_t match_index = 0;
+		bool found_two_identical_blocks = false;
+		bool found_three_identical_blocks = false;
+		for (; match_index < ciphertext_len / blocksize; match_index++) {
+			if (memcmp(ciphertext + (match_index * blocksize), ciphertext + ((match_index + 1) * blocksize), blocksize) == 0) {
+				found_two_identical_blocks = true;
+
+				if (memcmp(ciphertext + (match_index * blocksize),
+					ciphertext + ((match_index + 2) * blocksize), blocksize) == 0) {
+					found_three_identical_blocks = true;
+					break;
+				}
+			}
 		}
 
 		free(ciphertext);
 		ciphertext = NULL;
 
-		size_t ciphertext_len_with_p_prime = ciphertext_len;
-		bool found_p_prime = false;
-		size_t p_prime;
+		if (!found_two_identical_blocks) {
+			print_fail("AES ECB byte at a time (harder): failed to locate two repeating ciphertext blocks");
+			goto done;
+		}
 
-		// We now have a ciphertext where the unknown string is block-aligned. Now work out p'.
+		if (!found_three_identical_blocks) {
+			continue;
+		}
+
+		// We now have worked out where the unknown string begins and aligned it to the block size;
+		// we have our plaintext m. Grow our input until a new block appears to figure out p.
+		size_t m_ciphertext_len = ciphertext_len;
+		size_t p;
+		bool found_p = false;
+
 		for (size_t j = 0; j < blocksize; j++) {
 			if (!aes_encryption_oracle_fixed_key_unknown_string_random_prefix(unknown_string, unknown_string_len,
-				attacker_string_four_blocks, curr_plaintext_len + j, &ciphertext, &ciphertext_len)) {
+				attacker_string, curr_plaintext_len + j, &ciphertext, &ciphertext_len)) {
 				print_fail("AES ECB byte at a time (harder): failed to encrypt plaintext");
 				goto done;
 			}
 			free(ciphertext);
 			ciphertext = NULL;
-			if (ciphertext_len > ciphertext_len_with_p_prime) {
-				if (ciphertext_len_with_p_prime + 16 != ciphertext_len) {
-					print_fail("unexpected ciphertext size growth: %zu %zu\n", ciphertext_len, ciphertext_len_with_p_prime);
+			if (ciphertext_len > m_ciphertext_len) {
+				if (m_ciphertext_len + 16 != ciphertext_len) {
+					print_fail("unexpected ciphertext size growth: %zu %zu\n", ciphertext_len, m_ciphertext_len);
 					goto done;
 				}
-				found_p_prime = true;
-				p_prime = j - 1;
+				found_p = true;
+				p = j - 1;
 				break;
 			}
 		}
 
-		if (!found_p_prime) {
+		if (!found_p) {
 			print_fail("AES ECB byte at a time (harder): failed to determine padding length\n");
 			goto done;
 		}
 
-		unknown_string_len_guess = ciphertext_len_with_p_prime
+		unknown_string_len_guess = m_ciphertext_len
 			- (match_index * blocksize) // remove k blocks containing any part of random prefix
-			- 3 * blocksize // remove blocks containing exclusively attacker controlled string
-			- p_prime; // remove PKCS7 padding at end of unknown string
+			- 3 * blocksize // remove blocks exclusively containing attacker controlled string
+			- p; // remove PKCS7 padding at end of unknown string
 
 		break;
 	}
