@@ -74,5 +74,9 @@ ecb_cut_and_paste_test: output_dirs ecb_cut_and_paste.c kv_parse.o aes_128_ecb.o
 	$(CC) -o $(BIN)/ecb_cut_and_paste $(OBJ)/kv_parse.o $(OBJ)/aes_128_ecb.o $(OBJ)/pkcs7_padding.o $(OBJ)/utility.o ecb_cut_and_paste.c
 	$(BIN)/ecb_cut_and_paste
 
+cbc_bitflip_attack_test: output_dirs aes_cbc.o utility.o pkcs7_padding.o kv_parse.o xor_buffers.o aes_128_ecb.o
+	$(CC) -o $(BIN)/cbc_bitflip_attack $(OBJ)/kv_parse.o $(OBJ)/aes_cbc.o $(OBJ)/pkcs7_padding.o $(OBJ)/utility.o $(OBJ)/xor_buffers.o $(OBJ)/aes_128_ecb.o cbc_bitflip_attack.c
+	$(BIN)/cbc_bitflip_attack
+
 clean:
 	rm -rf $(BIN); rm -rf $(OBJ)
