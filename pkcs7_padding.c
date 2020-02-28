@@ -6,12 +6,9 @@
 #include "pkcs7_padding.h"
 #include "utility.h"
 
-char *pkcs7_pad_buffer(bool force_padding, const char *buffer, size_t buffer_len, size_t block_size, size_t *out_padded_len)
+char *pkcs7_pad_buffer(const char *buffer, size_t buffer_len, size_t block_size, size_t *out_padded_len)
 {
 	size_t pad_len = block_size - (buffer_len % block_size);
-	if (pad_len == block_size && !force_padding) {
-		pad_len = 0;
-	}
 
 	char *padded = calloc(1, buffer_len + pad_len);
 	if (padded == NULL) {
@@ -31,20 +28,26 @@ char *pkcs7_pad_buffer(bool force_padding, const char *buffer, size_t buffer_len
 	return padded;
 }
 
-size_t pkcs7_unpad_buffer(const char *buffer, size_t buffer_len)
+bool pkcs7_unpad_buffer(const char *buffer, size_t buffer_len, size_t *out_unpadded_len)
 {
 	char last_byte = buffer[buffer_len - 1];
-	if (last_byte > buffer_len) {
-		return buffer_len;
+	
+	// Check padding correctness
+	if (last_byte >= buffer_len) {
+		return false;
 	}
 
 	for (size_t i = buffer_len - last_byte; i < buffer_len; i++) {
 		if (buffer[i] != last_byte) {
-			return buffer_len;
+			return false;
 		}
 	}
 
-	return buffer_len - last_byte;
+	if (out_unpadded_len != NULL) {
+		*out_unpadded_len = buffer_len - last_byte;
+	}
+
+	return true;
 }
 
 #if PKCS7_PADDING_TEST
@@ -55,7 +58,7 @@ int main(int argc, char **argv)
 	memset(buffer, 17, 3);
 
 	size_t padded_len;
-	char *padded = pkcs7_pad_buffer(true, buffer, 3, 4, &padded_len);
+	char *padded = pkcs7_pad_buffer(buffer, 3, 4, &padded_len);
 	if (!padded) {
 		print_fail("PKCS#7 padding: failed to pad");
 		exit(-1);
@@ -75,7 +78,11 @@ int main(int argc, char **argv)
 		exit(-1);
 	}
 
-	size_t unpadded = pkcs7_unpad_buffer(padded, padded_len);
+	size_t unpadded;
+	if (!pkcs7_unpad_buffer(padded, padded_len, &unpadded)) {
+		print_fail("PKCS#7 padding: failed to unpad");
+		exit(-1);
+	}
 	if (unpadded != 3) {
 		print_fail("PKCS#7 padding: wrong unpadded length %zu", unpadded);
 		exit(-1);
@@ -89,7 +96,7 @@ int main(int argc, char **argv)
 	buffer = malloc(5);
 	memset(buffer, 17, 5);
 
-	padded = pkcs7_pad_buffer(true, buffer, 5, 4, &padded_len);
+	padded = pkcs7_pad_buffer(buffer, 5, 4, &padded_len);
 	if (!padded) {
 		print_fail("PKCS#7 padding: failed to pad");
 		exit(-1);
@@ -109,7 +116,10 @@ int main(int argc, char **argv)
 		exit(-1);
 	}
 
-	unpadded = pkcs7_unpad_buffer(padded, padded_len);
+	if (!pkcs7_unpad_buffer(padded, padded_len, &unpadded)) {
+		print_fail("PKCS#7 padding: failed to unpad");
+		exit(-1);
+	}
 	if (unpadded != 5) {
 		print_fail("PKCS#7 padding: wrong unpadded length %zu", unpadded);
 		exit(-1);
@@ -123,34 +133,7 @@ int main(int argc, char **argv)
 	buffer = malloc(4);
 	memset(buffer, 17, 4);
 
-	padded = pkcs7_pad_buffer(false, buffer, 4, 4, &padded_len);
-	if (!padded) {
-		print_fail("PKCS#7 padding: failed to pad");
-		exit(-1);
-	}
-	if (padded_len != 4) {
-		print_fail("PKCS#7 padding: bad pad length %zu", padded_len);
-		exit(-1);
-	}
-
-	if (strncmp(buffer, padded, 4) != 0) {
-		print_fail("PKCS#7 padding: initial buffer missing");
-		exit(-1);
-	}
-
-	unpadded = pkcs7_unpad_buffer(padded, padded_len);
-	if (unpadded != 4) {
-		print_fail("PKCS#7 padding: wrong unpadded length %zu", unpadded);
-		exit(-1);
-	}
-
-	free(buffer);
-	free(padded);
-
-	buffer = malloc(4);
-	memset(buffer, 17, 4);
-
-	padded = pkcs7_pad_buffer(true, buffer, 4, 4, &padded_len);
+	padded = pkcs7_pad_buffer(buffer, 4, 4, &padded_len);
 	if (!padded) {
 		print_fail("PKCS#7 padding: failed to pad");
 		exit(-1);
@@ -164,13 +147,17 @@ int main(int argc, char **argv)
 		print_fail("PKCS#7 padding: initial buffer missing");
 		exit(-1);
 	}
-	
+
 	if (padded[4] != 4 || padded[5] != 4 || padded[6] != 4 || padded[7] != 4) {
 		print_fail("PKCS#7 padding: wrong pad bytes %hhd%hhd%hhd%hhd", padded[4], padded[5], padded[6], padded[7]);
         exit(-1);
     }
 
-	unpadded = pkcs7_unpad_buffer(padded, padded_len);
+	if (!pkcs7_unpad_buffer(padded, padded_len, &unpadded)) {
+		print_fail("PKCS#7 padding: failed to unpad");
+		exit(-1);
+	}
+
 	if (unpadded != 4) {
 		print_fail("PKCS#7 padding: wrong unpadded length %zu", unpadded);
 		exit(-1);
@@ -178,6 +165,28 @@ int main(int argc, char **argv)
 
 	free(buffer);
 	free(padded);
+
+	char *ok_pad = "ICE ICE BABY\x04\x04\x04\x04";
+	if (!pkcs7_unpad_buffer(ok_pad, strlen(ok_pad), &unpadded)) {
+		print_fail("PKCS#7 padding: failed to unpad");
+		exit(-1);
+	}
+	if (unpadded != 12) {
+		print_fail("PKCS#7 padding: wrong unpadded length %zu", unpadded);
+		exit(-1);
+	}
+
+	char *bad_pad = "ICE ICE BABY\x05\x05\x05\x05";
+	if (pkcs7_unpad_buffer(bad_pad, strlen(bad_pad), &unpadded)) {
+		print_fail("PKCS#7 padding: unpadded invalid padding");
+		exit(-1);
+	}
+
+	bad_pad = "ICE ICE BABY\x01\x02\x03\x04";
+	if (pkcs7_unpad_buffer(bad_pad, strlen(bad_pad), &unpadded)) {
+		print_fail("PKCS#7 padding: unpadded invalid padding");
+		exit(-1);
+	}
 
 	print_success("PKCS#7 padding OK");
 	return 0;

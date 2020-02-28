@@ -14,6 +14,8 @@
 bool aes_cbc(aes_cbc_op_t op, const char *buffer, size_t buffer_len, const char *init_vector, const char *key, size_t key_len, char **out_buffer, size_t *out_buffer_len)
 {
 	bool success = false;
+	char *output = NULL;
+	char *padded_buffer = NULL;
 
 	if (op < AES_CBC_OP_ENCRYPT || op > AES_CBC_OP_DECRYPT) {
 		print_fail("invalid operation");
@@ -26,12 +28,11 @@ bool aes_cbc(aes_cbc_op_t op, const char *buffer, size_t buffer_len, const char 
 		goto out;
 	}
 
-	char *padded_buffer = NULL;
 	size_t output_size;
 
 	// If encrypting, we must pad
 	if (op == AES_CBC_OP_ENCRYPT) {
-		padded_buffer = pkcs7_pad_buffer(false, buffer, buffer_len, key_len, &output_size);
+		padded_buffer = pkcs7_pad_buffer(buffer, buffer_len, key_len, &output_size);
 		if (padded_buffer == NULL) {
 			print_fail("failed to allocate padded buffer");
 			goto out;
@@ -47,7 +48,7 @@ bool aes_cbc(aes_cbc_op_t op, const char *buffer, size_t buffer_len, const char 
 		output_size = buffer_len;
 	}
 
-	char *output = calloc(1, output_size);
+	output = calloc(1, output_size);
 	if (output == NULL) {
 		print_fail("failed to allocate output buffer");
 		goto out;
@@ -92,7 +93,6 @@ bool aes_cbc(aes_cbc_op_t op, const char *buffer, size_t buffer_len, const char 
 			}
 
 			output_block = malloc(key_len);
-			const char *other_buffer = NULL;
 			xor_buffers(decrypted_block, i == 0 ? init_vector : padded_buffer + ((i - 1)  * key_len), output_block, key_len);
 			free(decrypted_block);
 			if (output_block == NULL) {
@@ -108,7 +108,10 @@ bool aes_cbc(aes_cbc_op_t op, const char *buffer, size_t buffer_len, const char 
 	}
 
 	if (op == AES_CBC_OP_DECRYPT) {
-		output_size = pkcs7_unpad_buffer(output, output_size);
+		if (!pkcs7_unpad_buffer(output, output_size, &output_size)) {
+			print_fail("failed to unpad buffer");
+			goto out;
+		}
 	}
 
 	if (out_buffer) {

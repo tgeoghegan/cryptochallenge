@@ -208,13 +208,13 @@ bool encrypted_profile_for(const char *email, char **out_encrypted_profile, size
 	}
 
 	size_t padded_len = 0;
-	padded_profile = pkcs7_pad_buffer(false, unencrypted_profile, strlen(unencrypted_profile), 16, &padded_len);
+	padded_profile = pkcs7_pad_buffer(unencrypted_profile, strlen(unencrypted_profile), 16, &padded_len);
 	if (padded_profile == NULL) {
 		goto out;
 	}
 
 	size_t encrypted_profile_len = 0;
-	if (aes_128_ecb_encrypt(unencrypted_profile, padded_len, aes_key, 16, &encrypted_profile, &encrypted_profile_len) != 0) {
+	if (aes_128_ecb_encrypt(padded_profile, padded_len, aes_key, 16, &encrypted_profile, &encrypted_profile_len) != 0) {
 		goto out;
 	}
 
@@ -255,10 +255,16 @@ xpc_object_t parse_encrypted_profile(const char *encrypted_profile, size_t encry
 	}
 
 	// Strip padding from plaintext by truncating string with NUL
-	decrypted_profile[pkcs7_unpad_buffer(decrypted_profile, decrypted_profile_len)] = '\0';
+	size_t unpadded_len;
+	if (!pkcs7_unpad_buffer(decrypted_profile, decrypted_profile_len, &unpadded_len)) {
+		print_fail("failed to unpad buffer");
+		goto out;
+	}
+	decrypted_profile[unpadded_len] = '\0';
 
 	parsed = parse_profile(decrypted_profile);
 	if (parsed == NULL) {
+		print_fail("failed to parse profile");
 		goto out;
 	}
 

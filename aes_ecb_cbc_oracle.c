@@ -66,7 +66,7 @@ bool aes_encryption_oracle_random(char *plaintext, size_t plaintext_len, char **
 		}
 	} else {
 		size_t padded_len;
-		ecb_padded_plaintext = pkcs7_pad_buffer(false, doctored_plaintext, doctored_plaintext_len, 16, &padded_len);
+		ecb_padded_plaintext = pkcs7_pad_buffer(doctored_plaintext, doctored_plaintext_len, 16, &padded_len);
 		if (ecb_padded_plaintext == NULL) {
 			goto out;
 		}
@@ -106,7 +106,7 @@ bool aes_ecb_encryption_oracle(char *plaintext, size_t plaintext_len, char **out
 	char *ciphertext = NULL;
 	size_t ciphertext_len;
 
-	padded_plaintext = pkcs7_pad_buffer(false, plaintext, plaintext_len, 16, &padded_len);
+	padded_plaintext = pkcs7_pad_buffer(plaintext, plaintext_len, 16, &padded_len);
 	if (padded_plaintext == NULL) {
 		goto out;
 	}
@@ -315,7 +315,7 @@ bool aes_ecb_byte_at_a_time_decrypt(const char *unknown_string, size_t unknown_s
 		}
 	}
 
-	size_t unknown_string_len_guess = bare_unknown_string_ciphertext_len - (plaintext_len_guess - 1);
+	size_t unknown_string_len_guess = bare_unknown_string_ciphertext_len - plaintext_len_guess;
 
 	if (unknown_string_len_guess != unknown_string_len) {
 		print_fail("AES ECB byte at a time: Failed to guess unknown string length (guessed %zd, actually %zd)", unknown_string_len_guess, unknown_string_len);
@@ -548,7 +548,7 @@ bool aes_ecb_byte_at_a_time_decrypt_random_prefix(const char *unknown_string, si
 					goto done;
 				}
 				found_p = true;
-				p = j - 1;
+				p = j;
 				break;
 			}
 		}
