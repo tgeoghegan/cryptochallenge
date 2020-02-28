@@ -470,6 +470,9 @@ bool aes_ecb_byte_at_a_time_decrypt_random_prefix(const char *unknown_string, si
 	const size_t blocksize = 16;
 	char *ciphertext = NULL;
 	size_t ciphertext_len;
+	char *unknown_string_guess = NULL;
+	char *guess_plaintext = NULL;
+	size_t match_index;
 
 	// We need at least three blocks to guarantee that we can get two consecutive, repeating blocks
 	// of attacker controlled ciphertext, and we allocate an extra block so we can grow the input to
@@ -478,6 +481,7 @@ bool aes_ecb_byte_at_a_time_decrypt_random_prefix(const char *unknown_string, si
 	memset(attacker_string, 'a', sizeof(attacker_string));
 
 	size_t unknown_string_len_guess = 0;
+	size_t m_attacker_string_len;
 	for (size_t i = 0; i < blocksize; i++) {
 		size_t curr_plaintext_len = sizeof(attacker_string) - blocksize + i;
 		if (!aes_encryption_oracle_fixed_key_unknown_string_random_prefix(unknown_string, unknown_string_len,
@@ -496,9 +500,9 @@ bool aes_ecb_byte_at_a_time_decrypt_random_prefix(const char *unknown_string, si
 		// we have block aligned the unknown string. Note that two identical blocks isn't
 		// necessarily our attacker controlled string--there could be repeating blocks in the random
 		// prefix.
-		size_t match_index = 0;
 		bool found_two_identical_blocks = false;
 		bool found_three_identical_blocks = false;
+		match_index = 0;
 		for (; match_index < ciphertext_len / blocksize; match_index++) {
 			if (memcmp(ciphertext + (match_index * blocksize), ciphertext + ((match_index + 1) * blocksize), blocksize) == 0) {
 				found_two_identical_blocks = true;
@@ -527,6 +531,7 @@ bool aes_ecb_byte_at_a_time_decrypt_random_prefix(const char *unknown_string, si
 		// we have our plaintext m. Grow our input until a new block appears to figure out p.
 		size_t m_ciphertext_len = ciphertext_len;
 		size_t p;
+		m_attacker_string_len = curr_plaintext_len;
 		bool found_p = false;
 
 		for (size_t j = 0; j < blocksize; j++) {
@@ -566,11 +571,89 @@ bool aes_ecb_byte_at_a_time_decrypt_random_prefix(const char *unknown_string, si
 			unknown_string_len_guess, unknown_string_len);
 		goto done;
 	}
-	printf("guesses len %zu, is actually %zu\n", unknown_string_len_guess, unknown_string_len);
+
+	unknown_string_guess = calloc(1, unknown_string_len_guess);
+	if (unknown_string_guess == NULL) {
+		goto done;
+	}
+
+	guess_plaintext = calloc(1, unknown_string_len_guess + sizeof(attacker_string));
+	if (guess_plaintext == NULL) {
+		print_fail("AES ECB byte at a time (harder): failed to allocate");
+		goto done;
+	}
+
+	// Guess each letter of plaintext
+	for (size_t i = 0; i < unknown_string_len_guess; i++) {
+		char *curr_ciphertext = NULL;
+		size_t curr_ciphertext_len;
+		size_t curr_plaintext_len = m_attacker_string_len - 1 - (i % blocksize);
+
+		// Encrypt an input that will put the target character of the unknown
+		// string at the end of a block in the ciphertext
+		if (!aes_encryption_oracle_fixed_key_unknown_string_random_prefix(unknown_string, unknown_string_len,
+			attacker_string, curr_plaintext_len, &curr_ciphertext, &curr_ciphertext_len)) {
+			print_fail("failed to encrypt ciphertext %zd", i);
+			goto done;
+		}
+
+		// Construct a plaintext such that everything but the last character in
+		// a block looks like the string we just encrypted.
+		// Guess is what we just encrypted || the portion of the unknown string
+		// we have decrypted so far || current guess char
+		memcpy(guess_plaintext, attacker_string, curr_plaintext_len);
+		memcpy(guess_plaintext + curr_plaintext_len, unknown_string_guess, i);
+
+		// Iterate over all characters until we find one such that the
+		// ciphertext block containing the current target character of the
+		// unknown string matches the ciphertext block from the encryption done
+		// above
+		int c;
+		for (c = 0; c < 256; c++) {
+			guess_plaintext[curr_plaintext_len + i] = (char)c;
+
+			char *guess_ciphertext = NULL;
+			size_t guess_ciphertext_len;
+			if (!aes_encryption_oracle_fixed_key_unknown_string_random_prefix(unknown_string, unknown_string_len,
+				guess_plaintext, curr_plaintext_len + i + 1, &guess_ciphertext, &guess_ciphertext_len)) {
+				print_fail("failed to encrypt guess ciphertext %d", c);
+				goto done;
+			}
+
+			// We scan past the blocks containing the random prefix (match index) as well as those
+			// containing exclusively the attacker controlled string (2), then compare the block
+			// containing our current guess (i / blocksize * blocksize).
+			bool match = memcmp(curr_ciphertext + (match_index + 2) * blocksize + i / blocksize * blocksize,
+				guess_ciphertext + (match_index + 2) * blocksize + i / blocksize * blocksize, blocksize) == 0;
+
+			free(guess_ciphertext);
+			guess_ciphertext = NULL;
+
+			if (match) {
+				unknown_string_guess[i] = c;
+				break;
+			}
+		}
+		free(curr_ciphertext);
+		curr_ciphertext = NULL;
+
+		if (c == 256) {
+			print_fail("failed to find a match");
+			goto done;
+		}
+	}
+
+	if (memcmp(unknown_string, unknown_string_guess, unknown_string_len) != 0) {
+		print_fail("AES ECB byte at a time: wrong unknown string");
+		goto done;
+	}
 
 	success = true;
+
 done:
 	free(ciphertext);
+	free(guess_plaintext);
+	free(unknown_string_guess);
 
 	return success;
 }
