@@ -9,7 +9,7 @@ void print_success(const char *format, ...);
 		_print_fail("%s:%d\t", __FILE__, __LINE__); \
 		_print_fail(format, ##__VA_ARGS__); 		\
 		_print_fail("\n");							\
-	} while(0);
+	} while(0)
 
 void _print_fail(const char *format, ...);
 void generate_random_string(char *buf, size_t len);

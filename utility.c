@@ -80,10 +80,9 @@ size_t memcmp_where(const char *lhs, const char *rhs, size_t size)
 
 void dump_hex_fd(FILE *filedes, const char *string, size_t len)
 {
-	fprintf(filedes, "0x");
 	for (size_t i = 0; i < len; i++) {
 		if (i % 16 == 0 && i > 0) {
-			fprintf(filedes, " ");
+			fprintf(filedes, "\n");
 		}
 		fprintf(filedes, "%02x", (unsigned char)string[i]);
 	}

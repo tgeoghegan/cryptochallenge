@@ -7,7 +7,7 @@ all: tests
 output_dirs:
 	mkdir -p $(BIN); mkdir -p $(OBJ)
 
-tests: base64_test repeating_key_xor_test decrypt_single_char_xor_test xor_buffers_test aes_128_ecb_test pkcs7_padding_test aes_cbc_test aes_ecb_cbc_oracle_test kv_parse_test ecb_cut_and_paste_test
+tests: base64_test repeating_key_xor_test decrypt_single_char_xor_test xor_buffers_test aes_128_ecb_test pkcs7_padding_test aes_cbc_test aes_ecb_cbc_oracle_test kv_parse_test ecb_cut_and_paste_test cbc_bitflip_attack_test
 
 base64_test: output_dirs utility.o hex_to_base64.c
 	$(CC) -DBASE64_TEST -o $(BIN)/hex_to_base64 $(OBJ)/utility.o hex_to_base64.c

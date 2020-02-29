@@ -55,8 +55,6 @@ bool encrypt_userdata(bool force_admin, const char *userdata, size_t userdata_le
 	}
 	memcpy(dest, SUFFIX, strlen(SUFFIX));
 
-	printf("plaintext is %s\n", plaintext);
-
 	iv = malloc(blocksize);
 	if (iv == NULL) {
 		goto done;
@@ -92,14 +90,84 @@ bool is_encrypted_userdata_admin(const char *encrypted, size_t encrypted_len, co
 		goto done;
 	}
 
-	// strnstr returns NULL if needle doesn't occur in haystack
-	if (strnstr(plaintext, ADMIN_STRING, plaintext_len) == NULL) {
+	// Inefficiently crawl along the plaintext doing memcmps, because strnstr doesn't quite do what
+	// we want. Tampering with ciphertext will cause the corresponding block of plaintext to be
+	// totally garbled, which might insert NUL characters into the plaintext. That will cause
+	// strnstr to give up regardless of the length passed to it (which is fair, as it's defined to)
+	// work on C strings. We laboriously use memcmp to ensure the entire string gets checked.
+	for (size_t i = 0; i < plaintext_len - strlen(ADMIN_STRING); i++) {
+		if (memcmp(plaintext + i, ADMIN_STRING, strlen(ADMIN_STRING)) == 0) {
+			success = true;
+			break;
+		}
+	}
+
+done:
+	free(plaintext);
+
+	return success;
+}
+
+bool forge_admin_profile(void)
+{
+	bool success = false;
+	char *encrypted = NULL;
+	char *key = NULL;
+	char *iv = NULL;
+
+	key = aes_generate_key();
+	if (key == NULL) {
+		print_fail("CBC bitflip: failed to generate key");
 		goto done;
+	}
+
+	/*
+	 * We are performing a CBC bitflip attack. This depends first and foremost on the fact that CBC
+	 * is not an authenticated mode so we can tamper with the ciphertext. Beyond that, it's possible
+	 * because of how CBC decryption works: after decrypting block n, the ciphertext of block n - 1
+	 * is XORed in. Since we control the ciphertext, that means we can tamper with bits in block
+	 * n - 1 and then write whatever bits we want in the next block. Tampering with ciphertext does
+	 * mean that the block we tamper with will decrypt to garbage, but we can construct our attacker
+	 * provided userdata to make sure that the corrupted block only contains userdata, which
+	 * hopefully wouldn't be checked by the server we're attacking. Specifically, let's construct a
+	 * userdata of "aaaaaaaaaaaaaaaaaaaaa:admin<true". This will yield a plaintext:
+	 * 
+	 * comment1=cooking
+	 * %20MCs;userdata=
+	 * aaaaaaaaaaaaaaaa
+	 * aaaaa:admin<true
+ 	 * ;comment2=%20lik
+	 * e%20a%20pound%20
+	 * of%20bacon
+	 *
+	 * ASCII : and < are one less than ; and =, respectively, so if we make sure the corresponding
+	 * bits in the previous ciphertext block are set, then the CBC decryption will rewrite us into
+	 * admins. Frankly much simpler than the previous ECB exercises! Mind you I don't know how we
+	 * would solve this if we didn't know the length of the prefix and suffix strings. The tricks we
+	 * used in ECB wouldn't work as blocks don't encrypt deterministically in CBC.
+	 */
+	const char *userdata = "aaaaaaaaaaaaaaaaaaaaa:admin<true";
+	size_t encrypted_len;
+
+	if (!encrypt_userdata(false, userdata, strlen(userdata), key, &encrypted, &encrypted_len, &iv)) {
+		print_fail("CBC bitflip: failed to encrypt userdata");
+		exit(-1);
+	}
+
+	size_t colon_index = strlen(PREFIX) + 5;
+	encrypted[colon_index] = encrypted[colon_index] ^ 1;
+	size_t opening_angle_bracket_index = strlen(PREFIX) + 11;
+	encrypted[opening_angle_bracket_index] = encrypted[opening_angle_bracket_index] ^ 1;
+
+	if (!is_encrypted_userdata_admin(encrypted, encrypted_len, key, iv)) {
+		print_fail("CBC bitflip: tampered ciphertext did not decrypt to admin profile");
 	}
 
 	success = true;
 done:
-	free(plaintext);
+	free(key);
+	free(encrypted);
+	free(iv);
 
 	return success;
 }
@@ -114,7 +182,7 @@ int main(int argc, char const *argv[])
 		exit(-1);
 	}
 
-	const char *userdata = "hello";
+	const char *userdata = "aaaaaaaaaaaaaaaahello";
 	char *encrypted = NULL;
 	size_t encrypted_len;
 	char *iv = NULL;
@@ -130,6 +198,8 @@ int main(int argc, char const *argv[])
 
 	free(encrypted);
 	encrypted = NULL;
+	free(iv);
+	iv = NULL;
 
 	if (!encrypt_userdata(true, userdata, strlen(userdata), key, &encrypted, &encrypted_len, &iv)) {
 		print_fail("CBC bitflip: failed to encrypt userdata");
@@ -142,9 +212,16 @@ int main(int argc, char const *argv[])
 
 	free(encrypted);
 	encrypted = NULL;
+	free(iv);
+	iv = NULL;
 
 	if (encrypt_userdata(false, ADMIN_STRING, strlen(ADMIN_STRING), key, &encrypted, &encrypted_len, &iv)) {
 		print_fail("CBC bitflip: bogus userdata should be rejected");
+		exit(-1);
+	}
+
+	if (!forge_admin_profile()) {
+		print_fail("CBC bitflip: failed to forge admin profile");
 		exit(-1);
 	}
 
