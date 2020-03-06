@@ -78,5 +78,9 @@ cbc_bitflip_attack_test: output_dirs aes_cbc.o utility.o pkcs7_padding.o kv_pars
 	$(CC) -o $(BIN)/cbc_bitflip_attack $(OBJ)/kv_parse.o $(OBJ)/aes_cbc.o $(OBJ)/pkcs7_padding.o $(OBJ)/utility.o $(OBJ)/xor_buffers.o $(OBJ)/aes_128_ecb.o cbc_bitflip_attack.c
 	$(BIN)/cbc_bitflip_attack
 
+cbc_padding_oracle_test: output_dirs aes_cbc.o utility.o pkcs7_padding.o xor_buffers.o aes_128_ecb.o base64.o
+	$(CC) -o $(BIN)/cbc_padding_oracle $(OBJ)/aes_cbc.o $(OBJ)/pkcs7_padding.o $(OBJ)/utility.o $(OBJ)/xor_buffers.o $(OBJ)/aes_128_ecb.o $(OBJ)/hex_to_base64.o cbc_padding_oracle.c
+	$(BIN)/cbc_padding_oracle
+
 clean:
 	rm -rf $(BIN); rm -rf $(OBJ)
