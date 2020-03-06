@@ -208,8 +208,7 @@ bool encrypted_profile_for(const char *email, char **out_encrypted_profile, size
 	}
 
 	size_t padded_len = 0;
-	padded_profile = pkcs7_pad_buffer(unencrypted_profile, strlen(unencrypted_profile), 16, &padded_len);
-	if (padded_profile == NULL) {
+	if (!pkcs7_pad_buffer(unencrypted_profile, strlen(unencrypted_profile), 16, &padded_profile, &padded_len)) {
 		goto out;
 	}
 

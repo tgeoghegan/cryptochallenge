@@ -6,13 +6,13 @@
 #include "pkcs7_padding.h"
 #include "utility.h"
 
-char *pkcs7_pad_buffer(const char *buffer, size_t buffer_len, size_t block_size, size_t *out_padded_len)
+bool pkcs7_pad_buffer(const char *buffer, size_t buffer_len, size_t block_size, char **out_padded, size_t *out_padded_len)
 {
 	size_t pad_len = block_size - (buffer_len % block_size);
 
 	char *padded = calloc(1, buffer_len + pad_len);
 	if (padded == NULL) {
-		return NULL;
+		return false;
 	}
 
 	memcpy(padded, buffer, buffer_len);
@@ -21,11 +21,15 @@ char *pkcs7_pad_buffer(const char *buffer, size_t buffer_len, size_t block_size,
 		padded[buffer_len + i] = pad_len;
 	}
 
+	if (out_padded != NULL) {
+		*out_padded = padded;
+	}
+
 	if (out_padded_len) {
 		*out_padded_len = pad_len + buffer_len;
 	}
 
-	return padded;
+	return true;
 }
 
 bool pkcs7_unpad_buffer(const char *buffer, size_t buffer_len, size_t *out_unpadded_len)
@@ -58,8 +62,8 @@ int main(int argc, char **argv)
 	memset(buffer, 17, 3);
 
 	size_t padded_len;
-	char *padded = pkcs7_pad_buffer(buffer, 3, 4, &padded_len);
-	if (!padded) {
+	char *padded = NULL;
+	if (!pkcs7_pad_buffer(buffer, 3, 4, &padded, &padded_len)) {
 		print_fail("PKCS#7 padding: failed to pad");
 		exit(-1);
 	}
@@ -96,8 +100,7 @@ int main(int argc, char **argv)
 	buffer = malloc(5);
 	memset(buffer, 17, 5);
 
-	padded = pkcs7_pad_buffer(buffer, 5, 4, &padded_len);
-	if (!padded) {
+	if (!pkcs7_pad_buffer(buffer, 5, 4, &padded, &padded_len)) {
 		print_fail("PKCS#7 padding: failed to pad");
 		exit(-1);
 	}
@@ -133,8 +136,7 @@ int main(int argc, char **argv)
 	buffer = malloc(4);
 	memset(buffer, 17, 4);
 
-	padded = pkcs7_pad_buffer(buffer, 4, 4, &padded_len);
-	if (!padded) {
+	if (!pkcs7_pad_buffer(buffer, 4, 4, &padded, &padded_len)) {
 		print_fail("PKCS#7 padding: failed to pad");
 		exit(-1);
 	}

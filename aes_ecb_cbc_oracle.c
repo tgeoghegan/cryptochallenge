@@ -66,8 +66,7 @@ bool aes_encryption_oracle_random(char *plaintext, size_t plaintext_len, char **
 		}
 	} else {
 		size_t padded_len;
-		ecb_padded_plaintext = pkcs7_pad_buffer(doctored_plaintext, doctored_plaintext_len, 16, &padded_len);
-		if (ecb_padded_plaintext == NULL) {
+		if (!pkcs7_pad_buffer(doctored_plaintext, doctored_plaintext_len, 16, &ecb_padded_plaintext, &padded_len)) {
 			goto out;
 		}
 
@@ -106,8 +105,7 @@ bool aes_ecb_encryption_oracle(char *plaintext, size_t plaintext_len, char **out
 	char *ciphertext = NULL;
 	size_t ciphertext_len;
 
-	padded_plaintext = pkcs7_pad_buffer(plaintext, plaintext_len, 16, &padded_len);
-	if (padded_plaintext == NULL) {
+	if (!pkcs7_pad_buffer(plaintext, plaintext_len, 16, &padded_plaintext, &padded_len)) {
 		goto out;
 	}
 	

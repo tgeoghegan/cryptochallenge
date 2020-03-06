@@ -32,8 +32,7 @@ aes_cbc_error_t aes_cbc(aes_cbc_op_t op, const char *buffer, size_t buffer_len, 
 
 	// If encrypting, we must pad
 	if (op == AES_CBC_OP_ENCRYPT) {
-		padded_buffer = pkcs7_pad_buffer(buffer, buffer_len, key_len, &output_size);
-		if (padded_buffer == NULL) {
+		if (!pkcs7_pad_buffer(buffer, buffer_len, key_len, &padded_buffer, &output_size)) {
 			print_fail("failed to allocate padded buffer");
 			goto out;
 		}
