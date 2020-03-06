@@ -104,7 +104,34 @@ int main(int argc, char const *argv[])
 		exit(-1);
 	}
 
+	// Verify bad padding is rejected
+	char *tampered_ciphertext = malloc(ciphertext_len);
+	if (tampered_ciphertext == NULL) {
+		print_fail("AES CBC padding oracle: failed to allocate");
+		exit(-1);
+	}
+
+	memcpy(tampered_ciphertext, ciphertext, ciphertext_len);
+
+	tampered_ciphertext[ciphertext_len - BLOCKSIZE] = ciphertext[ciphertext_len - BLOCKSIZE] ^ 1;
+
+	aes_cbc_error_t xored_with_1 = validate_padding(tampered_ciphertext, ciphertext_len, iv);
+
+	tampered_ciphertext[ciphertext_len - BLOCKSIZE] = ciphertext[ciphertext_len - BLOCKSIZE] ^ 2;
+
+	aes_cbc_error_t xored_with_2 = validate_padding(tampered_ciphertext, ciphertext_len, iv);
+
+	// We might get unlucky and have one of the two accidentally yield valid padding but at least
+	// one must yield bad padding
+	if (xored_with_1 == AES_CBC_ERROR_NONE && xored_with_2 == AES_CBC_ERROR_NONE) {
+		print_fail("AES CBC padding oracle: failed to reject bad padding");
+	}
+
 	print_success("AES CBC padding oracle OK");
+
+	free(ciphertext);
+	free(tampered_ciphertext);
+	free(iv);
 
 	return 0;
 }
