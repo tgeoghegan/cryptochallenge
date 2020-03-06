@@ -7,7 +7,9 @@ all: tests
 output_dirs:
 	mkdir -p $(BIN); mkdir -p $(OBJ)
 
-tests: base64_test repeating_key_xor_test decrypt_single_char_xor_test xor_buffers_test aes_128_ecb_test pkcs7_padding_test aes_cbc_test aes_ecb_cbc_oracle_test kv_parse_test ecb_cut_and_paste_test cbc_bitflip_attack_test
+tests: base64_test repeating_key_xor_test decrypt_single_char_xor_test xor_buffers_test 	\
+	aes_128_ecb_test pkcs7_padding_test aes_cbc_test aes_ecb_cbc_oracle_test kv_parse_test  \
+	ecb_cut_and_paste_test cbc_bitflip_attack_test cbc_padding_oracle_test aes_ctr_test
 
 base64_test: output_dirs utility.o hex_to_base64.c
 	$(CC) -DBASE64_TEST -o $(BIN)/hex_to_base64 $(OBJ)/utility.o hex_to_base64.c
@@ -81,6 +83,13 @@ cbc_bitflip_attack_test: output_dirs aes_cbc.o utility.o pkcs7_padding.o kv_pars
 cbc_padding_oracle_test: output_dirs aes_cbc.o utility.o pkcs7_padding.o xor_buffers.o aes_128_ecb.o base64.o
 	$(CC) -o $(BIN)/cbc_padding_oracle $(OBJ)/aes_cbc.o $(OBJ)/pkcs7_padding.o $(OBJ)/utility.o $(OBJ)/xor_buffers.o $(OBJ)/aes_128_ecb.o $(OBJ)/hex_to_base64.o cbc_padding_oracle.c
 	$(BIN)/cbc_padding_oracle
+
+aes_ctr.o: output_dirs aes_ctr.o
+	$(CC) -o $(OBJ)/aes_ctr.o aes_ctr.c
+
+aes_ctr_test: output_dirs utility.o xor_buffers.o aes_128_ecb.o hex_to_base64.o aes_ctr.c
+	$(CC) -DAES_CTR_TEST -o $(BIN)/aes_ctr $(OBJ)/utility.o $(OBJ)/aes_128_ecb.o $(OBJ)/xor_buffers.o $(OBJ)/hex_to_base64.o aes_ctr.c
+	$(BIN)/aes_ctr
 
 clean:
 	rm -rf $(BIN); rm -rf $(OBJ)
