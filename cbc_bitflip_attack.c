@@ -17,7 +17,7 @@ static const char *ADMIN_STRING = ";admin=true;";
  * resulting string under the provided key (which is assumed to be 16 bytes long) and places the
  * result in out_encrypted. A 16 byte IV is also created and passed to the caller in out_iv.
  */
-bool encrypt_userdata(bool force_admin, const char *userdata, size_t userdata_len, const char *key, 
+static bool encrypt_userdata(bool force_admin, const char *userdata, size_t userdata_len, const char *key, 
 	char **out_encrypted, size_t *out_encrypted_len, char **out_iv)
 {
 	bool success = false;
@@ -80,7 +80,7 @@ done:
 
 }
 
-bool is_encrypted_userdata_admin(const char *encrypted, size_t encrypted_len, const char *key,
+static bool is_encrypted_userdata_admin(const char *encrypted, size_t encrypted_len, const char *key,
 	const char *iv) {
 	bool success = false;
 	char *plaintext = NULL;
@@ -93,8 +93,8 @@ bool is_encrypted_userdata_admin(const char *encrypted, size_t encrypted_len, co
 	// Inefficiently crawl along the plaintext doing memcmps, because strnstr doesn't quite do what
 	// we want. Tampering with ciphertext will cause the corresponding block of plaintext to be
 	// totally garbled, which might insert NUL characters into the plaintext. That will cause
-	// strnstr to give up regardless of the length passed to it (which is fair, as it's defined to)
-	// work on C strings. We laboriously use memcmp to ensure the entire string gets checked.
+	// strnstr to give up regardless of the length passed to it (which is fair, as it's defined to
+	// work on C strings). We laboriously use memcmp to ensure the entire string gets checked.
 	for (size_t i = 0; i < plaintext_len - strlen(ADMIN_STRING); i++) {
 		if (memcmp(plaintext + i, ADMIN_STRING, strlen(ADMIN_STRING)) == 0) {
 			success = true;
@@ -108,7 +108,7 @@ done:
 	return success;
 }
 
-bool forge_admin_profile(void)
+static bool forge_admin_profile(void)
 {
 	bool success = false;
 	char *encrypted = NULL;
