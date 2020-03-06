@@ -37,7 +37,11 @@ bool pkcs7_unpad_buffer(const char *buffer, size_t buffer_len, size_t *out_unpad
 	char last_byte = buffer[buffer_len - 1];
 	
 	// Check padding correctness
-	if (last_byte >= buffer_len) {
+	if (last_byte > buffer_len) {
+		return false;
+	}
+
+	if (last_byte == 0x0) {
 		return false;
 	}
 
@@ -187,6 +191,18 @@ int main(int argc, char **argv)
 	bad_pad = "ICE ICE BABY\x01\x02\x03\x04";
 	if (pkcs7_unpad_buffer(bad_pad, strlen(bad_pad), &unpadded)) {
 		print_fail("PKCS#7 padding: unpadded invalid padding");
+		exit(-1);
+	}
+
+	ok_pad = "four\x4\x4\x4\x4";
+	if (!pkcs7_unpad_buffer(ok_pad, strlen(ok_pad), &unpadded)) {
+		print_fail("PKCS#7 padding: failed to unpad");
+		exit(-1);
+	}
+
+	ok_pad = "\x4\x4\x4\x4";
+	if (!pkcs7_unpad_buffer(ok_pad, strlen(ok_pad), &unpadded)) {
+		print_fail("PKCS#7 padding: failed to unpad");
 		exit(-1);
 	}
 

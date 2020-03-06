@@ -109,7 +109,6 @@ aes_cbc_error_t aes_cbc(aes_cbc_op_t op, const char *buffer, size_t buffer_len, 
 	if (op == AES_CBC_OP_DECRYPT) {
 		if (!pkcs7_unpad_buffer(output, output_size, &output_size)) {
 			error = AES_CBC_ERROR_BAD_PADDING;
-			print_fail("failed to unpad buffer");
 			goto out;
 		}
 	}
