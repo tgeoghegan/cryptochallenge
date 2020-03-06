@@ -61,7 +61,7 @@ bool aes_encryption_oracle_random(char *plaintext, size_t plaintext_len, char **
 			goto out;
 		}
 
-		if (!aes_cbc(AES_CBC_OP_ENCRYPT, doctored_plaintext, doctored_plaintext_len, cbc_iv, key, 16, &ciphertext, &ciphertext_len)) {
+		if (aes_cbc(AES_CBC_OP_ENCRYPT, doctored_plaintext, doctored_plaintext_len, cbc_iv, key, 16, &ciphertext, &ciphertext_len) != AES_CBC_ERROR_NONE) {
 			goto out;
 		}
 	} else {

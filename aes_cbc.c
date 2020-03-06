@@ -11,9 +11,9 @@
 #include "hex_to_base64.h"
 #include "utility.h"
 
-bool aes_cbc(aes_cbc_op_t op, const char *buffer, size_t buffer_len, const char *init_vector, const char *key, size_t key_len, char **out_buffer, size_t *out_buffer_len)
+aes_cbc_error_t aes_cbc(aes_cbc_op_t op, const char *buffer, size_t buffer_len, const char *init_vector, const char *key, size_t key_len, char **out_buffer, size_t *out_buffer_len)
 {
-	bool success = false;
+	aes_cbc_error_t error = AES_CBC_ERROR_MISC;
 	char *output = NULL;
 	char *padded_buffer = NULL;
 
@@ -109,6 +109,7 @@ bool aes_cbc(aes_cbc_op_t op, const char *buffer, size_t buffer_len, const char 
 
 	if (op == AES_CBC_OP_DECRYPT) {
 		if (!pkcs7_unpad_buffer(output, output_size, &output_size)) {
+			error = AES_CBC_ERROR_BAD_PADDING;
 			print_fail("failed to unpad buffer");
 			goto out;
 		}
@@ -122,12 +123,12 @@ bool aes_cbc(aes_cbc_op_t op, const char *buffer, size_t buffer_len, const char 
 		*out_buffer_len = output_size;
 	}
 
-	success = true;
+	error = AES_CBC_ERROR_NONE;
 out:
 	free(padded_buffer);
 	free(output);
 
-	return success;
+	return error;
 }
 
 #if AES_CBC_TEST
@@ -158,7 +159,7 @@ int main(int argc, char **argv)
 
 	char *decrypted = NULL;
 	size_t decrypted_len;
-	if (!aes_cbc(AES_CBC_OP_DECRYPT, raw_encrypted, raw_encrypted_len, init_vector, argv[2], strlen(argv[2]), &decrypted, &decrypted_len)) {
+	if (aes_cbc(AES_CBC_OP_DECRYPT, raw_encrypted, raw_encrypted_len, init_vector, argv[2], strlen(argv[2]), &decrypted, &decrypted_len) != AES_CBC_ERROR_NONE) {
 		print_fail("AES CBC: failed to decrypt");
 		exit(-1);
 	}
@@ -178,7 +179,7 @@ int main(int argc, char **argv)
 
 	char *re_encrypted = NULL;
 	size_t re_encrypted_len;
-	if (!aes_cbc(AES_CBC_OP_ENCRYPT, decrypted, decrypted_len, init_vector, argv[2], strlen(argv[2]), &re_encrypted, &re_encrypted_len)) {
+	if (aes_cbc(AES_CBC_OP_ENCRYPT, decrypted, decrypted_len, init_vector, argv[2], strlen(argv[2]), &re_encrypted, &re_encrypted_len) != AES_CBC_ERROR_NONE) {
 		print_fail("AES CBC: failed to re-encrypt");
 		exit(-1);
 	}
@@ -195,7 +196,7 @@ int main(int argc, char **argv)
 	
 	char *re_decrypted = NULL;
 	size_t re_decrypted_len;
-	if (!aes_cbc(AES_CBC_OP_DECRYPT, re_encrypted, re_encrypted_len, init_vector, argv[2], strlen(argv[2]), &re_decrypted, &re_decrypted_len)) {
+	if (aes_cbc(AES_CBC_OP_DECRYPT, re_encrypted, re_encrypted_len, init_vector, argv[2], strlen(argv[2]), &re_decrypted, &re_decrypted_len) != AES_CBC_ERROR_NONE) {
 		print_fail("AES CBC: failed to re-decrypt");
 		exit(-1);
 	}

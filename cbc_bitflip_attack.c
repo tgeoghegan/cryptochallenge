@@ -61,8 +61,8 @@ static bool encrypt_userdata(bool force_admin, const char *userdata, size_t user
 	}
 	arc4random_buf(iv, blocksize);
 
-	if (!aes_cbc(AES_CBC_OP_ENCRYPT, plaintext, plaintext_len, iv, key, blocksize, 
-			out_encrypted, out_encrypted_len)) {
+	if (aes_cbc(AES_CBC_OP_ENCRYPT, plaintext, plaintext_len, iv, key, blocksize,
+			out_encrypted, out_encrypted_len) != AES_CBC_ERROR_NONE) {
 		goto done;
 	}
 
@@ -86,7 +86,8 @@ static bool is_encrypted_userdata_admin(const char *encrypted, size_t encrypted_
 	char *plaintext = NULL;
 	size_t plaintext_len;
 
-	if (!aes_cbc(AES_CBC_OP_DECRYPT, encrypted, encrypted_len, iv, key, 16, &plaintext, &plaintext_len)) {
+	if (aes_cbc(AES_CBC_OP_DECRYPT, encrypted, encrypted_len, iv, key, 16, &plaintext, &plaintext_len)
+		!= AES_CBC_ERROR_NONE) {
 		goto done;
 	}
 
