@@ -42,11 +42,6 @@ static char *xor_raw_bytes_with_char(const char *raw_bytes, size_t len, char key
 	return decrypted;
 }
 
-static bool isprint_or_whitespace(char c)
-{
-	return isprint(c) || c == '\r' || c == '\n' || c == '\t';
-}
-
 float compute_englishness(const char *string, size_t len)
 {
 	int space_count = 0;

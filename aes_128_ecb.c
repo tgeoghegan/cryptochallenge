@@ -102,8 +102,8 @@ int main(int argc, char **argv)
 	}
 
 	size_t raw_encrypted_len;
-	char *raw_encrypted = base64_to_raw(encrypted, encrypted_len, &raw_encrypted_len);
-	if (raw_encrypted == NULL) {
+	char *raw_encrypted = NULL;
+	if (!base64_to_raw(encrypted, encrypted_len, &raw_encrypted, &raw_encrypted_len)) {
 		print_fail("failed to convert input to raw bytes");
 		exit(-1);
 	}

@@ -119,7 +119,7 @@ int guess_key(const char *ciphertext, size_t ciphertext_len, size_t key_len, cha
 
 		char *out_best_string = NULL;
 		char out_best_key;
-		float score = best_string_from_encrypted(true, transpose_block, transpose_block_len * 2, &out_best_string, &out_best_key);
+		(void)best_string_from_encrypted(true, transpose_block, transpose_block_len * 2, &out_best_string, &out_best_key);
 
 		key[i] = out_best_key;
 	}
@@ -187,8 +187,8 @@ int main(int argc, char **argv)
 	}
 
 	size_t raw_len;
-	char *raw_bytes = base64_to_raw(buf, size, &raw_len);
-	if (raw_bytes == NULL) {
+	char *raw_bytes = NULL;
+	if (!base64_to_raw(buf, size, &raw_bytes, &raw_len)) {
 		print_fail("failed to decode Base64 input");
 		exit(-1);
 	}

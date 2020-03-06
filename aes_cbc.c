@@ -148,8 +148,8 @@ int main(int argc, char **argv)
 	}
 
 	size_t raw_encrypted_len;
-	char *raw_encrypted = base64_to_raw(base64_buffer, base64_size, &raw_encrypted_len);
-	if (raw_encrypted == NULL) {
+	char *raw_encrypted = NULL;
+	if (!base64_to_raw(base64_buffer, base64_size, &raw_encrypted, &raw_encrypted_len)) {
 		print_fail("AES CBC: failed to convert base 64input to raw");
 		exit(-1);
 	}

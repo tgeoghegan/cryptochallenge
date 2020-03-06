@@ -1,4 +1,4 @@
-CC=xcrun -sdk macosx clang -g
+CC=xcrun -sdk macosx clang -g -Wall
 BIN=bin
 OBJ=obj
 

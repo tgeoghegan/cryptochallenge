@@ -43,7 +43,7 @@ bool is_base64_encoded(const char *candidate, size_t len)
 	return true;
 }
 
-char encode_base64_char(char input)
+char encode_base64_char(unsigned char input)
 {
 	if (input > strlen(base64_map)) {
 		return -1;
@@ -62,15 +62,16 @@ char decode_base64_char(char input)
 	return position - base64_map;
 }
 
-char *hex_to_base64(const char *hex, size_t length)
+bool hex_to_base64(const char *hex, size_t length, char **out_base64, size_t *out_base64_len)
 {
 	if (length % 2 != 0) {
-		return NULL;
+		return false;
 	}
 
-	char *base64 = calloc(1, length / 6 * 4 + (length % 6 != 0));
+	size_t base64_len = length / 6 * 4 + (length % 6 != 0);
+	char *base64 = calloc(1, base64_len);
 	if (base64 == NULL) {
-		return NULL;
+		return false;
 	}
 
 	// Six bits is one base64 character. LCM of 6 and 8 (== one byte) is 24, so
@@ -102,14 +103,25 @@ char *hex_to_base64(const char *hex, size_t length)
 		}
 	}
 
-	return base64;
+	if (out_base64 != NULL) {
+		*out_base64 = base64;
+	} else {
+		free(base64);
+	}
+	if (out_base64_len != NULL) {
+		*out_base64_len = base64_len;
+	}
+
+	return true;
 }
 
-char *base64_to_raw(const char *base64, size_t length, size_t *out_raw_len)
+bool base64_to_raw(const char *base64, size_t length, char **out_raw, size_t *out_raw_len)
 {
+	bool success = false;
+	char *raw_decoded = NULL;
 	char *no_newlines = calloc(1, length);
 	if (no_newlines == NULL) {
-		return NULL;
+		goto done;
 	}
 
 	size_t no_newlines_len = 0;
@@ -118,7 +130,7 @@ char *base64_to_raw(const char *base64, size_t length, size_t *out_raw_len)
 			continue;
 		}
 		if (strchr(base64_map, base64[i]) == NULL && base64[i] != '=') {
-			goto out;
+			goto done;
 		}
 
 		no_newlines[no_newlines_len] = base64[i];
@@ -126,13 +138,13 @@ char *base64_to_raw(const char *base64, size_t length, size_t *out_raw_len)
 	}
 
 	if (no_newlines_len % 4 != 0) {
-		goto out;
+		goto done;
 	}
 
 	size_t raw_len = no_newlines_len * 3 / 4;
-	char *raw_decoded = calloc(1, raw_len);
+	raw_decoded = calloc(1, raw_len);
 	if (raw_decoded == NULL) {
-		goto out;
+		goto done;
 	}
 
 	// Construct three ASCII bites from four Base64 characters
@@ -173,10 +185,17 @@ char *base64_to_raw(const char *base64, size_t length, size_t *out_raw_len)
 		*out_raw_len = raw_len;
 	}
 
-out:
+	if (out_raw != NULL) {
+		*out_raw = raw_decoded;
+	} else {
+		free(raw_decoded);
+	}
+
+	success = true;
+done:
 	free(no_newlines);
 
-	return raw_decoded;
+	return success;
 }
 
 char *hex_print_string(const char *string, size_t len)
@@ -205,13 +224,18 @@ int main(void)
 	const char *input3 = "49276d206b696c6c696e6720796f757220627261696e206c696b65206120706f69736f6e6f7573206d757368726f";
 
 	size_t len = strlen(input);
-	char *output = hex_to_base64(input, len);
-	if (!output || strcmp(output, "SSdtIGtpbGxpbmcgeW91ciBicmFpbiBsaWtlIGEgcG9pc29ub3VzIG11c2hyb29t") != 0) {
+	char *output = NULL;
+	if (!hex_to_base64(input, len, &output, NULL)
+		|| !output
+		|| strcmp(output, "SSdtIGtpbGxpbmcgeW91ciBicmFpbiBsaWtlIGEgcG9pc29ub3VzIG11c2hyb29t") != 0) {
 		print_fail("base64 conversion failed: %s -> %s", input, output);
 		exit(-1);
 	}
 
-	char *original = base64_to_raw(output, strlen(output), NULL);
+	char *original = NULL;
+	if (!base64_to_raw(output, strlen(output), &original, NULL)) {
+		print_fail("conversion to raw failed");
+	}
 	char *original_hex = NULL;
 	if (original) {
 		original_hex = hex_print_string(original, strlen(original));
@@ -229,13 +253,16 @@ int main(void)
 	free(output);
 	output = NULL;
 
-	output = hex_to_base64(input2, strlen(input2));
-	if (!output || strcmp(output, "SSdtIGtpbGxpbmcgeW91ciBicmFpbiBsaWtlIGEgcG9pc29ub3VzIG11c2hyb28=") != 0) {
+	if (!hex_to_base64(input2, strlen(input2), &output, NULL)
+		|| !output
+		|| strcmp(output, "SSdtIGtpbGxpbmcgeW91ciBicmFpbiBsaWtlIGEgcG9pc29ub3VzIG11c2hyb28=") != 0) {
 		print_fail("base64 conversion failed: %s -> %s", input2, output);
 		exit(-1);
 	}
 
-	original = base64_to_raw(output, strlen(output), NULL);
+	if (!base64_to_raw(output, strlen(output), &original, NULL)) {
+		print_fail("base64 conversion failed: %s -> %s", output, original);
+	}
 	if (original) {
 		original_hex = hex_print_string(original, strlen(original));
 		if (!original_hex || strcmp(original_hex, input2) != 0) {
@@ -252,13 +279,16 @@ int main(void)
 	free(output);
 	output = NULL;
 
-	output = hex_to_base64(input3, strlen(input3));
-	if (!output || strcmp(output, "SSdtIGtpbGxpbmcgeW91ciBicmFpbiBsaWtlIGEgcG9pc29ub3VzIG11c2hybw==") != 0) {
+	if (!hex_to_base64(input3, strlen(input3), &output, NULL)
+		|| !output
+		|| strcmp(output, "SSdtIGtpbGxpbmcgeW91ciBicmFpbiBsaWtlIGEgcG9pc29ub3VzIG11c2hybw==") != 0) {
 		print_fail("Base64 conversion failed: %s -> %s", input3, output);
 		exit(-1);
 	}
 
-	original = base64_to_raw(output, strlen(output), NULL);
+	if (!base64_to_raw(output, strlen(output), &original, NULL)) {
+		print_fail("base64 conversion failed");
+	}
 	if (original) {
 		original_hex = hex_print_string(original, strlen(original));
 		if (!original_hex || strcmp(original_hex, input3) != 0) {

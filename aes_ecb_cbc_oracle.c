@@ -688,8 +688,8 @@ int main(int argc, char **argv)
 	}
 
 	size_t raw_unknown_string_len;
-	char *raw_unknown_string = base64_to_raw(base64_unknown_string, base64_unknown_string_len, &raw_unknown_string_len);
-	if (raw_unknown_string == NULL) {
+	char *raw_unknown_string = NULL;
+	if (!base64_to_raw(base64_unknown_string, base64_unknown_string_len, &raw_unknown_string, &raw_unknown_string_len)) {
 		print_fail("AES ECB byte at a time decrypt: failed to decode base64 input string");
 	}
 
