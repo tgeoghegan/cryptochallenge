@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/types.h>
 
 #include "aes_128_ecb.h"
@@ -96,7 +97,7 @@ int main()
 	// Parameters provided by challenge 18. Note in particular all-zero nonce.
 	const char *b64_ciphertext = "L77na/nrFsKvynd6HzOoG7GHTLXsTVu9qvY/2syLXzhPweyyMTJULu/6/kXX0KSvoOLSFQ==";
 	const char *key = "YELLOW SUBMARINE";
-	const char nonce[8] = {0};
+	const char nonce[BLOCKSIZE / 2] = {0};
 	char *raw_ciphertext = NULL;
 	size_t raw_ciphertext_len;
 
@@ -119,9 +120,54 @@ int main()
 		exit(-1);
 	}
 
+	// Roundtrip a few other messages with random nonces and keys
+	for (int i = 0; i < 10; i++) {
+		size_t message_len = arc4random_uniform(100) + 20;
+		char curr_key[BLOCKSIZE];
+		char curr_nonce[BLOCKSIZE / 2];
+		char message[120]; // biggest possible message given arc4random_uniform params
+
+		arc4random_buf(curr_key, sizeof(curr_key));
+		arc4random_buf(curr_nonce, sizeof(curr_nonce));
+		bzero(message, sizeof(message));
+		arc4random_buf(message, message_len);
+
+		char *ciphertext = NULL;
+		size_t ciphertext_len;
+		if (!aes_ctr(message, message_len, curr_key, curr_nonce, &ciphertext, &ciphertext_len)) {
+			print_fail("AES CTR: failed to encrypt message");
+			exit(-1);
+		}
+
+		if (ciphertext_len != message_len) {
+			print_fail("AES CTR: unexpected ciphertext length %zu", ciphertext_len);
+			exit(-1);
+		}
+
+		char *curr_plaintext = NULL;
+		size_t curr_plaintext_len;
+		if (!aes_ctr(ciphertext, ciphertext_len, curr_key, curr_nonce, &curr_plaintext, &curr_plaintext_len)) {
+			print_fail("AES CTR: failed to decrypt message");
+			exit(-1);
+		}
+
+		if (curr_plaintext_len != ciphertext_len) {
+			print_fail("AES CTR: unexpected plaintext length %zu", curr_plaintext_len);
+			exit(-1);
+		}
+
+		if (memcmp(curr_plaintext, message, curr_plaintext_len) != 0) {
+			print_fail("AES CTR: unexpected plaintext");
+			exit(-1);
+		}
+		free(curr_plaintext);
+		free(ciphertext);
+	}
+
 	print_success("AES CTR OK");
 
 	free(raw_ciphertext);
+	free(plaintext);
 
 	return 0;
 }
