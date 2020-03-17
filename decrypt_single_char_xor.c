@@ -10,6 +10,7 @@
 #include "decrypt_single_char_xor.h"
 #include "hex_to_base64.h"
 #include "utility.h"
+#include "compute_englishness.h"
 
 static void pretty_print(const char *string, size_t len);
 
@@ -42,94 +43,6 @@ static char *xor_raw_bytes_with_char(const char *raw_bytes, size_t len, char key
 	return decrypted;
 }
 
-float compute_englishness(const char *string, size_t len)
-{
-	int space_count = 0;
-	int other_count = 0;
-	int occurrences[26];
-	bzero(occurrences, sizeof(occurrences));
-	struct {
-		char letter;
-		float proportion;
-	} OCCURENCE_EXPECTATION[] = {
-		{ 'e', 0.1202f },
-		{ 't', 0.0910f },
-		{ 'a', 0.0812f },
-		{ 'o', 0.0768f },
-		{ 'i', 0.0731f },
-		{ 'n', 0.0695f },
-		{ 's', 0.0628f },
-		{ 'r', 0.0602f },
-		{ 'h', 0.0592f },
-		{ 'd', 0.0432f },
-		{ 'l', 0.0398f },
-		{ 'u', 0.0288f },
-		{ 'c', 0.0271f },
-		{ 'm', 0.0261f },
-		{ 'f', 0.0230f },
-		{ 'y', 0.0211f },
-		{ 'w', 0.0209f },
-		{ 'g', 0.0203f },
-		{ 'p', 0.0182f },
-		{ 'b', 0.0149f },
-		{ 'v', 0.0111f },
-		{ 'k', 0.0069f },
-		{ 'x', 0.0017f },
-		{ 'q', 0.0011f },
-		{ 'j', 0.0010f },
-		{ 'z', 0.0007f },
-	};
-
-	/*
-	 * Wolfram says the average English word is five letters, meaning there
-	 * should be a space about that often. That's pretty soft, but fuck it.
-	 */
-	float space_occurrence_expectation = (float)len / 6;
-	/* Rough guess that we expect one punctuation, paren, etc. per string */
-	float other_occurrence_expectation = 1.0f;
-
-	for (size_t i = 0; i < len; i++) {
-		if (isupper(string[i])) {
-			occurrences[string[i] - 'A']++;
-		} else if (islower(string[i])) {
-			occurrences[string[i] - 'a']++;
-		} else if (string[i] == ' ') {
-			space_count++;
-		} else {
-			other_count++;
-		}
-	}
-
-	bool verbose = false;
-
-	float delta_sum = 0;
-	for (size_t i = 0; i < sizeof(OCCURENCE_EXPECTATION) / sizeof(OCCURENCE_EXPECTATION[0]); i++) {
-		char c = OCCURENCE_EXPECTATION[i].letter;
-		float expectation = OCCURENCE_EXPECTATION[i].proportion * len;
-		float occurred = (float)occurrences[c - 'a'];
-		float delta = (occurred - expectation) * (occurred - expectation) / expectation;
-		if (verbose)
-			printf("expect %f saw %f contribution %f for %c\n", expectation, occurred, delta, c);
-		delta_sum += delta;
-	}
-	float space_contrib = (space_count - space_occurrence_expectation) * (space_count - space_occurrence_expectation) / space_occurrence_expectation;
-	delta_sum += space_contrib;
-	float other_contrib = (other_count - other_occurrence_expectation) * (other_count - other_occurrence_expectation) / other_occurrence_expectation;
-	delta_sum += other_contrib;
-	if (verbose) {
-		printf("expect %f saw %d contribution %f for space\n", space_occurrence_expectation, space_count, space_contrib);
-		printf("expect %f saw %d contribution %f for other\n", other_occurrence_expectation, other_count, other_contrib);
-	}
-
-	if (verbose) {
-		printf("string:\n");
-		pretty_print(string, len);
-		printf("score %f\n", delta_sum);
-	}
-
-	return delta_sum;
-}
-
 static void pretty_print(const char *string, size_t len)
 {
 	if (string == NULL) {
@@ -154,7 +67,7 @@ float best_string_from_encrypted(bool raw_bytes, const char *encrypted, size_t l
 	for (int key = 0; key < 256; key++) {
 		char *decrypted = raw_bytes ? xor_raw_bytes_with_char(encrypted, length, (char)key) : xor_string_with_char(encrypted, length, (char)key);
 		if (decrypted) {
-			float score = compute_englishness(decrypted, length / 2);
+			float score = compute_englishness(decrypted, length / 2, ENGLISHNESS_CHECK_MONOGRAMS);
 			if (score < best_score) {
 				best_score = score;
 				best_key = key;

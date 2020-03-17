@@ -15,6 +15,7 @@
 #include "decrypt_single_char_xor.h"
 #include "hex_to_base64.h"
 #include "utility.h"
+#include "compute_englishness.h"
 
 char *repeating_key_xor(const char *plaintext, size_t len, const char *key, size_t key_len)
 {
@@ -217,7 +218,7 @@ int main(int argc, char **argv)
 			exit(-1);
 		}
 
-		float englishness = compute_englishness(decrypted, raw_len);
+		float englishness = compute_englishness(decrypted, raw_len, ENGLISHNESS_CHECK_MONOGRAMS);
 		if (englishness < best_englishness) {
 			best_englishness = englishness;
 			free(best_key);

@@ -9,7 +9,8 @@ output_dirs:
 
 tests: base64_test repeating_key_xor_test decrypt_single_char_xor_test xor_buffers_test 	\
 	aes_128_ecb_test pkcs7_padding_test aes_cbc_test aes_ecb_cbc_oracle_test kv_parse_test  \
-	ecb_cut_and_paste_test cbc_bitflip_attack_test cbc_padding_oracle_test aes_ctr_test
+	ecb_cut_and_paste_test cbc_bitflip_attack_test cbc_padding_oracle_test aes_ctr_test		\
+	fixed_nonce_ctr_test compute_englishness_test
 
 base64_test: output_dirs utility.o hex_to_base64.c
 	$(CC) -DBASE64_TEST -o $(BIN)/hex_to_base64 $(OBJ)/utility.o hex_to_base64.c
@@ -18,16 +19,16 @@ base64_test: output_dirs utility.o hex_to_base64.c
 hex_to_base64.o: output_dirs hex_to_base64.c
 	$(CC) -o $(OBJ)/hex_to_base64.o -c hex_to_base64.c
 
-decrypt_single_char_xor_test: output_dirs hex_to_base64.o utility.o decrypt_single_char_xor.c
-	$(CC) -DDECRYPT_SINGLE_CHAR_XOR_TEST -o $(BIN)/decrypt_single_char_xor $(OBJ)/hex_to_base64.o $(OBJ)/utility.o decrypt_single_char_xor.c
+decrypt_single_char_xor_test: output_dirs hex_to_base64.o utility.o decrypt_single_char_xor.c compute_englishness.o
+	$(CC) -DDECRYPT_SINGLE_CHAR_XOR_TEST -o $(BIN)/decrypt_single_char_xor $(OBJ)/hex_to_base64.o $(OBJ)/utility.o $(OBJ)/compute_englishness.o decrypt_single_char_xor.c
 	$(BIN)/decrypt_single_char_xor
 	$(BIN)/decrypt_single_char_xor input/input_4.txt
 
 decrypt_single_char_xor.o: output_dirs decrypt_single_char_xor.c
 	$(CC) -o $(OBJ)/decrypt_single_char_xor.o -c decrypt_single_char_xor.c
 
-repeating_key_xor_test: output_dirs decrypt_single_char_xor.o hex_to_base64.o repeating_key_xor.c utility.o
-	$(CC) -DTEST_REPEATING_KEY_XOR -o $(BIN)/repeating_key_xor $(OBJ)/hex_to_base64.o $(OBJ)/decrypt_single_char_xor.o $(OBJ)/utility.o repeating_key_xor.c
+repeating_key_xor_test: output_dirs decrypt_single_char_xor.o hex_to_base64.o repeating_key_xor.c utility.o compute_englishness.o
+	$(CC) -DTEST_REPEATING_KEY_XOR -o $(BIN)/repeating_key_xor $(OBJ)/hex_to_base64.o $(OBJ)/decrypt_single_char_xor.o $(OBJ)/utility.o $(OBJ)/compute_englishness.o repeating_key_xor.c
 	$(BIN)/repeating_key_xor input/input_6.txt input/decrypted_6.txt
 
 xor_buffers.o: output_dirs xor_buffers.c
@@ -84,12 +85,23 @@ cbc_padding_oracle_test: output_dirs aes_cbc.o utility.o pkcs7_padding.o xor_buf
 	$(CC) -o $(BIN)/cbc_padding_oracle $(OBJ)/aes_cbc.o $(OBJ)/pkcs7_padding.o $(OBJ)/utility.o $(OBJ)/xor_buffers.o $(OBJ)/aes_128_ecb.o $(OBJ)/hex_to_base64.o cbc_padding_oracle.c
 	$(BIN)/cbc_padding_oracle
 
-aes_ctr.o: output_dirs aes_ctr.o
-	$(CC) -o $(OBJ)/aes_ctr.o aes_ctr.c
+aes_ctr.o: output_dirs aes_ctr.c
+	$(CC) -o $(OBJ)/aes_ctr.o -c aes_ctr.c
 
 aes_ctr_test: output_dirs utility.o xor_buffers.o aes_128_ecb.o hex_to_base64.o aes_ctr.c
 	$(CC) -DAES_CTR_TEST -o $(BIN)/aes_ctr $(OBJ)/utility.o $(OBJ)/aes_128_ecb.o $(OBJ)/xor_buffers.o $(OBJ)/hex_to_base64.o aes_ctr.c
 	$(BIN)/aes_ctr
+
+fixed_nonce_ctr_test: output_dirs utility.o aes_128_ecb.o hex_to_base64.o xor_buffers.o aes_ctr.o
+	$(CC) -o $(BIN)/fixed_nonce_ctr $(OBJ)/utility.o $(OBJ)/aes_128_ecb.o $(OBJ)/hex_to_base64.o $(OBJ)/xor_buffers.o $(OBJ)/aes_ctr.o fixed_nonce_ctr.c
+	$(BIN)/fixed_nonce_ctr
+
+compute_englishness.o: output_dirs compute_englishness.c
+	$(CC) -o $(OBJ)/compute_englishness.o -c compute_englishness.c
+
+compute_englishness_test: output_dirs utility.o
+	$(CC) -DCOMPUTE_ENGLISHNESS_TEST -o $(BIN)/compute_englishness $(OBJ)/utility.o compute_englishness.c
+	$(BIN)/compute_englishness
 
 clean:
 	rm -rf $(BIN); rm -rf $(OBJ)
